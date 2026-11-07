@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <LanguageData>
   <PT_DefaultStopName>Остановка</PT_DefaultStopName>
   <PT_StopInspectName>Название: {0}</PT_StopInspectName>
@@ -41,5 +41,11 @@
   <PT_VehicleInvalid>Транспорт недоступен, не принадлежит колонии или не распознан VF.</PT_VehicleInvalid>
   <PT_VehicleAlreadyAssigned>Этот транспорт уже используется другой линией.</PT_VehicleAlreadyAssigned>
   <PT_VehicleOption>{0} (координаты: {1}, {2})</PT_VehicleOption>
-  <PT_NoAssignableVehicles>Нет свободного транспорта VF на этой карте.</PT_NoAssignableVehicles>
+  <PT_NoAssignableVehicles>На карте нет свободной пригодной техники: вагоны без локомотива и сильно повреждённые машины не предлагаются.</PT_NoAssignableVehicles>
+  <PT_VehicleStatusNotLeader>неподходящий ведущий транспорт (вагон не может вести линию)</PT_VehicleStatusNotLeader>
+  <PT_VehicleStatusDamaged>требуется ремонт; машина будет снята с линии</PT_VehicleStatusDamaged>
+  <PT_VehicleTooDamagedToAssign>Транспорт слишком повреждён для назначения. Сначала отремонтируйте его.</PT_VehicleTooDamagedToAssign>
+  <PT_VehicleAutoUnassignedDamage>{0} автоматически снят с линии «{1}»: повреждение одного из компонентов достигло {2}%.</PT_VehicleAutoUnassignedDamage>
+  <PT_DamageThresholdSetting>Автоматически снимать транспорт при повреждении любого компонента на {0}% или больше.</PT_DamageThresholdSetting>
+  <PT_DamageThresholdDescription>Порог относится к каждому компоненту отдельно (не к общему здоровью машины). Повреждённая машина остаётся в игре и может быть отремонтирована. После ремонта назначьте её заново.</PT_DamageThresholdDescription>
 </LanguageData>

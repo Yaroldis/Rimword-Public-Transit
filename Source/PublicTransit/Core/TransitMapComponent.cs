@@ -66,7 +66,9 @@ namespace PublicTransit.Core
 
             foreach (Thing thing in map.listerThings.AllThings)
             {
-                if (VehicleAdapter.CanAssign(thing, map) && !AssignedToAnotherRoute(thing, targetRoute))
+                if (VehicleAdapter.CanAssign(thing, map)
+                    && !IsVehicleOverDamageThreshold(thing)
+                    && !AssignedToAnotherRoute(thing, targetRoute))
                     result.Add(thing);
             }
             result.Sort((a, b) => string.Compare(a.LabelCap, b.LabelCap,
@@ -99,6 +101,11 @@ namespace PublicTransit.Core
                 error = "PT_VehicleInvalid".Translate();
                 return false;
             }
+            if (IsVehicleOverDamageThreshold(vehicle))
+            {
+                error = "PT_VehicleTooDamagedToAssign".Translate();
+                return false;
+            }
             if (AssignedToAnotherRoute(vehicle, route))
             {
                 error = "PT_VehicleAlreadyAssigned".Translate();
@@ -116,10 +123,12 @@ namespace PublicTransit.Core
         }
 
         /// <summary>
-        /// An off-map vehicle remains assigned (e.g. while in a caravan).
-        /// Destroyed or duplicate assignments are discarded; route stops survive.
+        /// Off-map vehicles retain their assignment (including caravans).
+        /// On-map assignments are automatically cleared when a VF component
+        /// loses at least the user-selected fraction of its maximum HP.
+        /// The pawn/vehicle is NOT destroyed; repair is still possible.
         /// </summary>
-        private void RepairVehicleAssignments(bool removeDestroyed)
+        private void RepairVehicleAssignments(bool checkActiveVehicles)
         {
             if (routes == null) return;
             var seen = new HashSet<Thing>();
@@ -127,16 +136,48 @@ namespace PublicTransit.Core
             {
                 if (route == null || route.AssignedVehicle == null) continue;
                 Thing vehicle = route.AssignedVehicle;
-                if ((removeDestroyed && vehicle.Destroyed) || !VehicleAdapter.IsVehicle(vehicle) || !seen.Add(vehicle))
+                if ((checkActiveVehicles && vehicle.Destroyed) || !VehicleAdapter.IsVehicle(vehicle)
+                    || !seen.Add(vehicle))
+                {
                     route.SetAssignedVehicle(null);
+                    continue;
+                }
+                // Avoid inspecting transient Thing state while Scribe resolves references.
+                if (!checkActiveVehicles || !vehicle.Spawned || vehicle.Map != map)
+                    continue;
+
+                if (!VehicleAdapter.IsRouteLeader(vehicle) || vehicle.Faction != Faction.OfPlayer)
+                {
+                    route.SetAssignedVehicle(null);
+                    continue;
+                }
+
+                float fraction;
+                string component;
+                if (VehicleAdapter.TryGetWorstComponentHealth(vehicle, out fraction, out component)
+                    && 1f - fraction >= PublicTransitMod.DamageUnassignThreshold)
+                {
+                    route.SetAssignedVehicle(null);
+                    int percent = (int)Math.Round((1f - fraction) * 100f);
+                    Messages.Message("PT_VehicleAutoUnassignedDamage".Translate(
+                        vehicle.LabelCap, route.DisplayName, percent),
+                        MessageTypeDefOf.RejectInput, false);
+                }
             }
+        }
+
+        private static bool IsVehicleOverDamageThreshold(Thing vehicle)
+        {
+            float fraction;
+            string ignored;
+            return VehicleAdapter.TryGetWorstComponentHealth(vehicle, out fraction, out ignored)
+                && 1f - fraction >= PublicTransitMod.DamageUnassignThreshold;
         }
 
         public override void MapComponentTick()
         {
             base.MapComponentTick();
-            // Not a transport AI: only clean up destroyed vehicle references.
-            // This lightweight check runs once per 250 game ticks.
+            // Only once per 250 game ticks, never for every pawn every tick.
             if (Find.TickManager.TicksGame % 250 == 0)
                 RepairVehicleAssignments(true);
         }
@@ -147,8 +188,10 @@ namespace PublicTransit.Core
             if (vehicle == null) return "PT_VehicleStatusNone".Translate();
             if (vehicle.Destroyed) return "PT_VehicleStatusDestroyed".Translate();
             if (!VehicleAdapter.IsVehicle(vehicle)) return "PT_VehicleStatusInvalid".Translate();
+            if (!VehicleAdapter.IsRouteLeader(vehicle)) return "PT_VehicleStatusNotLeader".Translate();
             if (!vehicle.Spawned || vehicle.Map != map) return "PT_VehicleStatusOffMap".Translate();
             if (vehicle.Faction != Faction.OfPlayer) return "PT_VehicleStatusNotOwned".Translate();
+            if (IsVehicleOverDamageThreshold(vehicle)) return "PT_VehicleStatusDamaged".Translate();
             if (route.Stops.Count < 2) return "PT_VehicleStatusNeedStops".Translate();
             return "PT_VehicleStatusReady".Translate();
         }

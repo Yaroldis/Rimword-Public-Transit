@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <LanguageData>
   <PT_DefaultStopName>Stop</PT_DefaultStopName>
   <PT_StopInspectName>Name: {0}</PT_StopInspectName>
@@ -41,5 +41,11 @@
   <PT_VehicleInvalid>Vehicle is unavailable, not player-owned or not recognized as a VF vehicle.</PT_VehicleInvalid>
   <PT_VehicleAlreadyAssigned>This vehicle is already assigned to another line.</PT_VehicleAlreadyAssigned>
   <PT_VehicleOption>{0} (cell: {1}, {2})</PT_VehicleOption>
-  <PT_NoAssignableVehicles>No unassigned VF vehicles are available on this map.</PT_NoAssignableVehicles>
+  <PT_NoAssignableVehicles>No suitable free vehicles: railcars without a locomotive and heavily damaged vehicles are excluded.</PT_NoAssignableVehicles>
+  <PT_VehicleStatusNotLeader>not a route-leading vehicle (railcars cannot lead a line)</PT_VehicleStatusNotLeader>
+  <PT_VehicleStatusDamaged>repair required; vehicle will be unassigned</PT_VehicleStatusDamaged>
+  <PT_VehicleTooDamagedToAssign>Vehicle is too damaged to be assigned. Repair it first.</PT_VehicleTooDamagedToAssign>
+  <PT_VehicleAutoUnassignedDamage>{0} was automatically unassigned from line "{1}": a component reached {2}% damage.</PT_VehicleAutoUnassignedDamage>
+  <PT_DamageThresholdSetting>Unassign vehicles when any component has {0}% damage or more.</PT_DamageThresholdSetting>
+  <PT_DamageThresholdDescription>Each component is checked separately, not the overall vehicle health. The vehicle remains repairable; reassign it after repair.</PT_DamageThresholdDescription>
 </LanguageData>
