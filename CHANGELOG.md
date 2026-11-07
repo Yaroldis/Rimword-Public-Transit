@@ -1,3 +1,12 @@
+## 0.4.2-dev — Path recovery hardening (2026-11-07)
+
+- Fix a premature route-stop condition: `VehiclePathFollower.Moving == false` is no longer treated as proof of a blocked road. Wait for sustained inactivity before reissuing a path.
+- A first recovery retries the same destination; only the second retry selects another footprint-safe docking cell.
+- Stalled movement (VF still reports Moving but the vehicle position does not change for 1800 ticks) also uses bounded recovery.
+- Emit a movement snapshot when recovering or blocking a route, including current position, destination, vehicle-stop gap, and best-effort VF state fields.
+- Driver presence, ignition logic, damage cutoffs, and train restrictions remain unchanged.
+- This is an experimental fix for observed 0.4.1 behavior. GitHub Actions and real RimWorld/VF 1.6.2144 tests are still required.
+
 ## 0.4.1-dev — Docking and ignition hotfix (2026-11-07)
 
 - Road vehicles now select a parking anchor using their entire rotated footprint, preferring cells immediately adjacent to a stop rather than the nearest pawn-walkable cell.

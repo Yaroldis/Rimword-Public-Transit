@@ -16,6 +16,7 @@ namespace PublicTransit.Core
         private const int StopWaitTicks = 240;
         private const int TravelTimeoutTicks = 1800;
         private const int PathStartGraceTicks = 150;
+        private const int PathInactiveRetryTicks = 360;
         private const int MaxDockingRetries = 2;
         private readonly Map map;
         private readonly Dictionary<TransitRoute, TravelWatch> watches =
@@ -28,6 +29,7 @@ namespace PublicTransit.Core
             public IntVec3 lastCell;
             public int lastProgressTick;
             public int commandTick;
+            public int inactiveSinceTick = -1;
             public int retries;
             public readonly HashSet<IntVec3> triedDockingCells = new HashSet<IntVec3>();
         }
@@ -206,6 +208,7 @@ namespace PublicTransit.Core
             watch.lastCell = vehicle.Position;
             watch.lastProgressTick = tick;
             watch.commandTick = tick;
+            watch.inactiveSinceTick = -1;
             route.SetDestinationCell(destination);
             route.SetRunState(TransitRunState.Moving);
             watches[route] = watch;
@@ -225,47 +228,106 @@ namespace PublicTransit.Core
                 return;
             }
             Building_TransitStop stop = route.Stops[route.NextStopIndex];
-            if (!moving && IsBesideStop(vehicle, stop))
+            if (IsBesideStop(vehicle, stop))
             {
+                // The footprint being beside the stop is authoritative for
+                // docking. VF can briefly be updating its internal path state.
+                if (moving) VehicleAdapter.TryStop(vehicle, out string unused);
                 Arrive(route, tick);
                 return;
             }
             if (!watches.TryGetValue(route, out TravelWatch watch))
             {
-                watch = new TravelWatch { lastCell = vehicle.Position,
-                    lastProgressTick = tick, commandTick = tick };
+                watch = new TravelWatch {
+                    lastCell = vehicle.Position, lastProgressTick = tick,
+                    commandTick = tick };
                 watch.triedDockingCells.Add(route.DestinationCell);
                 watches[route] = watch;
             }
-            if (!moving)
-            {
-                if (tick - watch.commandTick < PathStartGraceTicks)
-                    return; // Give VF time to initialize or complete the current path.
-                if (watch.retries < MaxDockingRetries &&
-                    TryGetDockingCell(stop, vehicle, watch.triedDockingCells,
-                        out IntVec3 alternate))
-                {
-                    watch.retries++;
-                    watch.triedDockingCells.Add(alternate);
-                    if (IssueLeg(route, vehicle, tick, alternate, watch))
-                        return;
-                }
-                Block(route, "VF path ended; stop='" + stop.StopName
-                    + "', vehicle-stop gap=" + DistanceFromBodyToStop(vehicle, stop)
-                    + ", target=" + route.DestinationCell
-                    + ", attempts=" + (watch.retries + 1));
-                return;
-            }
+
+            // Track real movement independently from the VF Moving flag.
+            // Moving == false does not establish that a road is blocked:
+            // the VF pathfinder can be calculating, interrupted, or temporarily
+            // between path segments. Do not immediately issue another order.
             if (watch.lastCell != vehicle.Position)
             {
                 watch.lastCell = vehicle.Position;
                 watch.lastProgressTick = tick;
             }
-            else if (tick - watch.lastProgressTick > TravelTimeoutTicks)
+
+            if (!moving)
             {
-                Block(route, "vehicle has not changed cells for " + TravelTimeoutTicks
-                    + " ticks near '" + stop.StopName + "'");
+                if (watch.inactiveSinceTick < 0)
+                    watch.inactiveSinceTick = tick;
+                if (tick - watch.commandTick < PathStartGraceTicks
+                    || tick - watch.inactiveSinceTick < PathInactiveRetryTicks)
+                    return;
+
+                TryRecoverLeg(route, vehicle, stop, tick, watch,
+                    "VF Moving=false for " + (tick - watch.inactiveSinceTick) + " ticks");
+                return;
             }
+
+            watch.inactiveSinceTick = -1;
+            if (tick - watch.lastProgressTick > TravelTimeoutTicks)
+            {
+                // VF still says it is moving, but the root cell has not
+                // changed for a long time. Treat this as a stalled leg and
+                // attempt bounded recovery instead of immediately blocking.
+                TryRecoverLeg(route, vehicle, stop, tick, watch,
+                    "position unchanged for " + (tick - watch.lastProgressTick) + " ticks");
+            }
+        }
+
+        private void TryRecoverLeg(TransitRoute route, Thing vehicle,
+            Building_TransitStop stop, int tick, TravelWatch watch, string reason)
+        {
+            if (watch.retries >= MaxDockingRetries)
+            {
+                Block(route, "VF travel did not reach stop='" + stop.StopName
+                    + "'; vehicle-stop gap=" + DistanceFromBodyToStop(vehicle, stop)
+                    + ", position=" + vehicle.Position
+                    + ", target=" + route.DestinationCell
+                    + ", attempts=" + (watch.retries + 1)
+                    + ", last condition=" + reason
+                    + "; VF state: " + VehicleAdapter.DescribeMovement(vehicle));
+                return;
+            }
+
+            // First recover to the SAME docking cell. VF may have temporarily
+            // stopped or discarded the current path. Choosing a new target
+            // on every retry can itself cause unstable path requests.
+            IntVec3 destination = route.DestinationCell;
+            if (watch.retries > 0)
+            {
+                // Only the second retry tries a different valid parking cell.
+                if (!TryGetDockingCell(stop, vehicle, watch.triedDockingCells,
+                    out destination))
+                {
+                    Block(route, "no alternative docking cell for '" + stop.StopName
+                        + "' after VF stopped at " + vehicle.Position
+                        + "; VF state: " + VehicleAdapter.DescribeMovement(vehicle));
+                    return;
+                }
+                watch.triedDockingCells.Add(destination);
+            }
+            watch.retries++;
+            Log.Warning("[Public Transit] Line '" + route.DisplayName
+                + "' retry " + watch.retries + "/" + MaxDockingRetries
+                + ": " + reason + "; pos=" + vehicle.Position
+                + "; stop='" + stop.StopName + "' gap="
+                + DistanceFromBodyToStop(vehicle, stop)
+                + "; destination=" + destination + "; VF state: "
+                + VehicleAdapter.DescribeMovement(vehicle));
+
+            if (!VehicleAdapter.TryStop(vehicle, out string stopError))
+            {
+                Block(route, "VF could not halt stalled path: " + stopError);
+                return;
+            }
+            if (!IssueLeg(route, vehicle, tick, destination, watch))
+                Block(route, "VF rejected recovery route to '" + stop.StopName
+                    + "' (" + reason + ")");
         }
 
         private void Arrive(TransitRoute route, int tick)

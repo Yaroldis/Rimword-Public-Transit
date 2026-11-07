@@ -380,6 +380,39 @@ namespace PublicTransit.Core
         }
 
         /// <summary>
+        /// Snapshot of VF movement state for troubleshooting, read ONLY when a
+        /// leg needs recovery. Unknown VF members are reported as "?" rather
+        /// than assumed to mean path failure. No state is modified here.
+        /// </summary>
+        public static string DescribeMovement(Thing vehicle)
+        {
+            if (!IsVehicle(vehicle)) return "not a VF vehicle";
+            try
+            {
+                object pather = ReadMember(vehicle, "vehiclePather", "VehiclePather");
+                if (pather == null) return "pather unavailable";
+                object moving = ReadMember(pather, "Moving", "moving");
+                object waiting = ReadMember(pather, "CalculatingPath", "calculatingPath",
+                    "WaitingForPath", "waitingForPath", "Pathing", "pathing");
+                object destination = ReadMember(pather, "Destination", "destination",
+                    "dest", "curDest", "CurDest");
+                object path = ReadMember(pather, "curPath", "CurPath", "currentPath");
+                object failed = ReadMember(pather, "PatherFailed", "patherFailed",
+                    "Failed", "failed");
+                return "moving=" + (moving == null ? "?" : moving.ToString())
+                    + ", calculating=" + (waiting == null ? "?" : waiting.ToString())
+                    + ", destination=" + (destination == null ? "?" : destination.ToString())
+                    + ", currentPath=" + (path == null ? "unknown/none" : "present")
+                    + ", failed=" + (failed == null ? "?" : failed.ToString())
+                    + ", canMove=" + CanMoveNow(vehicle);
+            }
+            catch (Exception ex)
+            {
+                return "VF movement inspection failed: " + ex.GetType().Name;
+            }
+        }
+
+        /// <summary>
         /// VF controls ignition separately from its path follower. A path order
         /// must not be issued while the engine is switched off. Only uses
         /// explicit ignition-on / draft setters on VF's ignition controller;
