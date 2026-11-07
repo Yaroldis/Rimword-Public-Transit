@@ -313,31 +313,36 @@ namespace PublicTransit.Core
                 null, Type.EmptyTypes, null);
         }
 
+        /// <summary>
+        /// Hand travel to RimWorld's job tracker rather than starting an
+        /// orphaned VF path. The framework patches the standard Goto job for
+        /// VehiclePawn; a bare VehiclePathFollower.StartPath can be cancelled
+        /// later when its job tracker changes the current job.
+        /// This method is deliberately limited to road vehicles in 0.4.3.
+        /// </summary>
         public static bool TryStartPath(Thing vehicle, IntVec3 destination, out string error)
         {
             if (!SupportsDriving(vehicle, out error)) return false;
+            var pawn = vehicle as Pawn;
+            if (pawn == null)
+            {
+                error = "VF vehicle is not a Pawn";
+                return false;
+            }
+
             try
             {
-                object pather = ReadMember(vehicle, "vehiclePather", "VehiclePather");
-                MethodInfo method = FindStartPath(pather.GetType());
-                ParameterInfo[] pars = method.GetParameters();
-                object[] args = new object[pars.Length];
-                args[0] = pars[0].ParameterType == typeof(IntVec3)
-                    ? (object)destination : new LocalTargetInfo(destination);
-                args[1] = Verse.AI.PathEndMode.OnCell;
-                for (int i = 2; i < args.Length; i++)
-                    args[i] = pars[i].DefaultValue;
-                object outcome = method.Invoke(pather, args);
-                if (outcome is bool && !(bool)outcome)
-                {
-                    error = "VehiclePathFollower rejected the path";
-                    return false;
-                }
+                // Follow the same job pipeline as a player-ordered Goto.
+                // Never call the VF pather directly from Public Transit.
+                Verse.AI.Job job = Verse.AI.JobMaker.MakeJob(
+                    JobDefOf.Goto, new LocalTargetInfo(destination));
+                job.playerForced = true;
+                pawn.jobs.TryTakeOrderedJob(job);
                 return true;
             }
             catch (Exception ex)
             {
-                error = "VF path request failed: " + (ex.InnerException ?? ex).Message;
+                error = "VF Goto job request failed: " + (ex.InnerException ?? ex).Message;
                 return false;
             }
         }
@@ -349,6 +354,13 @@ namespace PublicTransit.Core
             if (!SupportsDriving(vehicle, out error)) return false;
             try
             {
+                // Cancel our movement job as well as the pather. Otherwise
+                // JobDriver_Goto can reissue a path on the next tick.
+                var pawn = vehicle as Pawn;
+                if (pawn != null && pawn.CurJob != null
+                    && pawn.CurJob.def == JobDefOf.Goto)
+                    pawn.jobs.EndCurrentJob(Verse.AI.JobCondition.InterruptForced);
+
                 object pather = ReadMember(vehicle, "vehiclePather", "VehiclePather");
                 FindStop(pather.GetType()).Invoke(pather, null);
                 return true;
@@ -399,7 +411,11 @@ namespace PublicTransit.Core
                 object path = ReadMember(pather, "curPath", "CurPath", "currentPath");
                 object failed = ReadMember(pather, "PatherFailed", "patherFailed",
                     "Failed", "failed");
-                return "moving=" + (moving == null ? "?" : moving.ToString())
+                Pawn pawn = vehicle as Pawn;
+                string jobName = pawn == null || pawn.CurJob == null || pawn.CurJob.def == null
+                    ? "none" : pawn.CurJob.def.defName;
+                return "job=" + jobName
+                    + ", moving=" + (moving == null ? "?" : moving.ToString())
                     + ", calculating=" + (waiting == null ? "?" : waiting.ToString())
                     + ", destination=" + (destination == null ? "?" : destination.ToString())
                     + ", currentPath=" + (path == null ? "unknown/none" : "present")
