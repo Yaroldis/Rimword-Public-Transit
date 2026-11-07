@@ -379,6 +379,115 @@ namespace PublicTransit.Core
             }
         }
 
+        /// <summary>
+        /// VF controls ignition separately from its path follower. A path order
+        /// must not be issued while the engine is switched off. Only uses
+        /// explicit ignition-on / draft setters on VF's ignition controller;
+        /// never starts a vehicle without its occupied driver seat.
+        /// Returns false with a diagnostic if the specific VF build exposes
+        /// no supported ignition setter. Manual ignition is still possible.
+        /// </summary>
+        public static bool TryEnsureIgnition(Thing vehicle, out string reason)
+        {
+            reason = null;
+            if (!IsVehicle(vehicle)) { reason = "not a VF vehicle"; return false; }
+            if (!HasActiveDriver(vehicle)) { reason = "no active driver"; return false; }
+            try
+            {
+                object controller = ReadMember(vehicle, "ignition", "Ignition");
+                if (controller == null)
+                {
+                    if (CanMoveNow(vehicle)) return true;
+                    reason = "VF ignition controller unavailable";
+                    return false;
+                }
+
+                // The draft state represents engine ignition for VF vehicles.
+                // Other forks may expose an equivalent explicit property.
+                object current = ReadMember(controller, "Drafted", "Ignited",
+                    "IgnitionOn", "EngineOn", "IsIgnited");
+                if (current is bool && !(bool)current)
+                {
+                    if (!TryWriteBoolMember(controller, true, "Drafted", "Ignited",
+                        "IgnitionOn", "EngineOn"))
+                    {
+                        if (!TryInvokeIgnitionOn(controller))
+                        {
+                            reason = "VF ignition is off, but this version has no supported on-setter";
+                            return false;
+                        }
+                    }
+                }
+                else if (!(current is bool))
+                {
+                    // Never blindly toggle an unknown controller state.
+                    if (!CanMoveNow(vehicle))
+                    {
+                        reason = "VF ignition state unavailable; start the engine manually";
+                        return false;
+                    }
+                }
+
+                if (CanMoveNow(vehicle)) return true;
+                reason = "ignition requested but VF reports unable to drive (fuel or components)";
+                return false;
+            }
+            catch (Exception ex)
+            {
+                reason = "VF ignition failed: " + (ex.InnerException ?? ex).Message;
+                return false;
+            }
+        }
+
+        private static bool TryWriteBoolMember(object instance, bool value, params string[] names)
+        {
+            for (Type type = instance.GetType(); type != null; type = type.BaseType)
+            {
+                foreach (string name in names)
+                {
+                    PropertyInfo property = type.GetProperty(name, InstanceMembers | BindingFlags.DeclaredOnly);
+                    if (property != null && property.PropertyType == typeof(bool)
+                        && property.GetIndexParameters().Length == 0 && property.GetSetMethod(true) != null)
+                    {
+                        property.SetValue(instance, value, null);
+                        return true;
+                    }
+                    // A public field is considered only if it is an explicit
+                    // ignition state flag, never a generic VF private field.
+                    FieldInfo field = type.GetField(name, InstanceMembers | BindingFlags.DeclaredOnly);
+                    if (field != null && field.FieldType == typeof(bool)
+                        && field.IsPublic && !field.IsInitOnly)
+                    {
+                        field.SetValue(instance, value);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static bool TryInvokeIgnitionOn(object controller)
+        {
+            foreach (string name in new[] { "SetIgnition", "SetDrafted", "StartEngine", "Ignite" })
+            {
+                MethodInfo withFlag = controller.GetType().GetMethod(name, InstanceMembers,
+                    null, new[] { typeof(bool) }, null);
+                if (withFlag != null)
+                {
+                    withFlag.Invoke(controller, new object[] { true });
+                    return true;
+                }
+                MethodInfo noArgs = controller.GetType().GetMethod(name, InstanceMembers,
+                    null, Type.EmptyTypes, null);
+                if (noArgs != null)
+                {
+                    noArgs.Invoke(controller, null);
+                    return true;
+                }
+            }
+            return false;
+        }
+
         public static bool CanMoveNow(Thing vehicle)
         {
             try

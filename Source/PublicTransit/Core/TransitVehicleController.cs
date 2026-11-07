@@ -8,23 +8,28 @@ using Verse;
 namespace PublicTransit.Core
 {
     /// <summary>
-    /// Controls a single automatically driven road vehicle per route.
-    /// This class never boards a pawn or overrides their JobDriver.
-    /// Tick checks are cheap (every 30 ticks) and vehicle commands run only on transitions.
+    /// Automatic movement of one ROAD vehicle per route. VF remains responsible for
+    /// actual pathfinding and movement. No pawn jobs or passenger logic are changed.
     /// </summary>
     public sealed class TransitVehicleController
     {
         private const int StopWaitTicks = 240;
         private const int TravelTimeoutTicks = 1800;
+        private const int PathStartGraceTicks = 150;
+        private const int MaxDockingRetries = 2;
         private readonly Map map;
         private readonly Dictionary<TransitRoute, TravelWatch> watches =
             new Dictionary<TransitRoute, TravelWatch>();
+        private readonly Dictionary<TransitRoute, string> lastIgnitionWarning =
+            new Dictionary<TransitRoute, string>();
 
         private sealed class TravelWatch
         {
             public IntVec3 lastCell;
             public int lastProgressTick;
             public int commandTick;
+            public int retries;
+            public readonly HashSet<IntVec3> triedDockingCells = new HashSet<IntVec3>();
         }
 
         public TransitVehicleController(Map map) { this.map = map; }
@@ -49,7 +54,8 @@ namespace PublicTransit.Core
             route.SetServiceEnabled(true);
             route.SetRunState(TransitRunState.WaitingForDriver);
             watches.Remove(route);
-            // Initial destination: nearest stop unless already parked next to it.
+            lastIgnitionWarning.Remove(route);
+            // The nearest stop is the starting area, not necessarily the first destination.
             int closest = 0;
             float minimumDistance = float.MaxValue;
             for (int i = 0; i < route.Stops.Count; i++)
@@ -63,7 +69,10 @@ namespace PublicTransit.Core
             return true;
         }
 
-        /// <summary>Stop moving immediately; never delete the vehicle or its driver.</summary>
+        /// <summary>
+        /// Stops movement; deliberately leaves VF ignition alone so the player
+        /// retains control over the engine outside of Public Transit service.
+        /// </summary>
         public void Stop(TransitRoute route)
         {
             if (route == null) return;
@@ -75,6 +84,7 @@ namespace PublicTransit.Core
             route.SetServiceEnabled(false);
             route.SetDestinationCell(IntVec3.Invalid);
             watches.Remove(route);
+            lastIgnitionWarning.Remove(route);
         }
 
         public void TickRoute(TransitRoute route, int tick)
@@ -88,18 +98,14 @@ namespace PublicTransit.Core
                 Block(route, "invalid route or vehicle");
                 return;
             }
-            foreach (Building_TransitStop stop in route.Stops)
+            if (!AllStopsValid(route))
             {
-                if (stop == null || stop.Destroyed || !stop.Spawned || stop.Map != map)
-                {
-                    Block(route, "missing stop");
-                    return;
-                }
+                Block(route, "missing stop");
+                return;
             }
 
             if (!VehicleAdapter.HasActiveDriver(vehicle))
             {
-                // A driver exiting while underway must halt the vehicle.
                 if (route.RunState == TransitRunState.Moving ||
                     route.RunState == TransitRunState.Recovering)
                 {
@@ -111,24 +117,44 @@ namespace PublicTransit.Core
                 }
                 route.SetRunState(TransitRunState.WaitingForDriver);
                 watches.Remove(route);
-                return;
-            }
-            if (!VehicleAdapter.CanMoveNow(vehicle))
-            {
-                Block(route, "VF reports vehicle cannot move (fuel, ignition or crew)");
+                lastIgnitionWarning.Remove(route);
                 return;
             }
 
-            // Save/load: do not issue a second path while VF is still driving.
+            // VehiclePawn.CanMoveFinal is NOT sufficient by itself to detect an
+            // un-drafted / unignited engine. Ask VF's ignition controller before
+            // attempting another path. Never start a vehicle without a driver.
+            if (!VehicleAdapter.TryEnsureIgnition(vehicle, out string ignitionReason))
+            {
+                if (route.RunState == TransitRunState.Moving ||
+                    route.RunState == TransitRunState.Recovering)
+                    VehicleAdapter.TryStop(vehicle, out string unused);
+                route.SetRunState(TransitRunState.WaitingForEngine);
+                watches.Remove(route);
+                // Keep the line enabled: the user can refuel, repair or start
+                // the engine manually without recreating the route.
+                if (!lastIgnitionWarning.TryGetValue(route, out string previous)
+                    || previous != ignitionReason)
+                {
+                    lastIgnitionWarning[route] = ignitionReason;
+                    Log.Warning("[Public Transit] Line '" + route.DisplayName
+                        + "' waiting for engine: " + ignitionReason);
+                }
+                return;
+            }
+            lastIgnitionWarning.Remove(route);
+
+            // After a save/load, avoid issuing a second path while VF is moving.
             if (route.RunState == TransitRunState.Recovering)
             {
-                bool moving;
-                if (VehicleAdapter.TryIsMoving(vehicle, out moving) && moving
+                if (VehicleAdapter.TryIsMoving(vehicle, out bool stillMoving) && stillMoving
                     && route.DestinationCell.IsValid)
                 {
                     route.SetRunState(TransitRunState.Moving);
-                    watches[route] = new TravelWatch {
+                    var watch = new TravelWatch {
                         lastCell = vehicle.Position, lastProgressTick = tick, commandTick = tick };
+                    watch.triedDockingCells.Add(route.DestinationCell);
+                    watches[route] = watch;
                     return;
                 }
                 route.SetRunState(TransitRunState.WaitingForDriver);
@@ -151,26 +177,39 @@ namespace PublicTransit.Core
             if (route.NextStopIndex < 0 || route.NextStopIndex >= route.Stops.Count)
                 route.SetNextStopIndex(0);
             Building_TransitStop stop = route.Stops[route.NextStopIndex];
-            IntVec3 destination;
-            if (!TryGetDockingCell(stop, vehicle, out destination))
-            {
-                Block(route, "no free docking cell near " + stop.StopName);
-                return;
-            }
-            if (vehicle.Position == destination)
+            if (IsBesideStop(vehicle, stop))
             {
                 Arrive(route, tick);
                 return;
             }
-            if (!VehicleAdapter.TryStartPath(vehicle, destination, out string error))
+            if (!TryGetDockingCell(stop, vehicle, null, out IntVec3 destination))
             {
-                Block(route, error);
+                Block(route, "no full-size parking space next to '" + stop.StopName + "'");
                 return;
             }
+
+            var watch = new TravelWatch {
+                lastCell = vehicle.Position, lastProgressTick = tick, commandTick = tick };
+            watch.triedDockingCells.Add(destination);
+            if (!IssueLeg(route, vehicle, tick, destination, watch))
+                Block(route, "VF rejected initial path to '" + stop.StopName + "'");
+        }
+
+        private bool IssueLeg(TransitRoute route, Thing vehicle, int tick, IntVec3 destination,
+            TravelWatch watch)
+        {
+            if (!VehicleAdapter.TryStartPath(vehicle, destination, out string error))
+            {
+                Log.Warning("[Public Transit] " + error);
+                return false;
+            }
+            watch.lastCell = vehicle.Position;
+            watch.lastProgressTick = tick;
+            watch.commandTick = tick;
             route.SetDestinationCell(destination);
             route.SetRunState(TransitRunState.Moving);
-            watches[route] = new TravelWatch {
-                lastCell = vehicle.Position, lastProgressTick = tick, commandTick = tick };
+            watches[route] = watch;
+            return true;
         }
 
         private void CheckProgress(TransitRoute route, Thing vehicle, int tick)
@@ -180,30 +219,42 @@ namespace PublicTransit.Core
                 Block(route, "missing saved docking cell");
                 return;
             }
-            bool moving;
-            if (!VehicleAdapter.TryIsMoving(vehicle, out moving))
+            if (!VehicleAdapter.TryIsMoving(vehicle, out bool moving))
             {
                 Block(route, "cannot read VehiclePathFollower.Moving");
                 return;
             }
-            // A vehicle may be stopped 1 cell short due to VF's footprint logic.
-            if (!moving && vehicle.Position.DistanceToSquared(route.DestinationCell) <= 2)
+            Building_TransitStop stop = route.Stops[route.NextStopIndex];
+            if (!moving && IsBesideStop(vehicle, stop))
             {
                 Arrive(route, tick);
                 return;
             }
-            if (!moving)
-            {
-                if (watches.TryGetValue(route, out TravelWatch pending)
-                    && tick - pending.commandTick <= 120)
-                    return; // VF may still be initializing its path.
-                Block(route, "path ended before reaching the stop");
-                return;
-            }
             if (!watches.TryGetValue(route, out TravelWatch watch))
             {
-                watch = new TravelWatch { lastCell = vehicle.Position, lastProgressTick = tick };
+                watch = new TravelWatch { lastCell = vehicle.Position,
+                    lastProgressTick = tick, commandTick = tick };
+                watch.triedDockingCells.Add(route.DestinationCell);
                 watches[route] = watch;
+            }
+            if (!moving)
+            {
+                if (tick - watch.commandTick < PathStartGraceTicks)
+                    return; // Give VF time to initialize or complete the current path.
+                if (watch.retries < MaxDockingRetries &&
+                    TryGetDockingCell(stop, vehicle, watch.triedDockingCells,
+                        out IntVec3 alternate))
+                {
+                    watch.retries++;
+                    watch.triedDockingCells.Add(alternate);
+                    if (IssueLeg(route, vehicle, tick, alternate, watch))
+                        return;
+                }
+                Block(route, "VF path ended; stop='" + stop.StopName
+                    + "', vehicle-stop gap=" + DistanceFromBodyToStop(vehicle, stop)
+                    + ", target=" + route.DestinationCell
+                    + ", attempts=" + (watch.retries + 1));
+                return;
             }
             if (watch.lastCell != vehicle.Position)
             {
@@ -212,7 +263,8 @@ namespace PublicTransit.Core
             }
             else if (tick - watch.lastProgressTick > TravelTimeoutTicks)
             {
-                Block(route, "no progress on route for " + TravelTimeoutTicks + " ticks");
+                Block(route, "vehicle has not changed cells for " + TravelTimeoutTicks
+                    + " ticks near '" + stop.StopName + "'");
             }
         }
 
@@ -236,28 +288,66 @@ namespace PublicTransit.Core
         }
 
         /// <summary>
-        /// A building's tile is not necessarily drivable. Pick a free nearby cell
-        /// for a first test; VF will validate the actual route and footprint.
-        /// This is NOT a full vehicle-aware docking planner yet.
+        /// A station occupies its own tile. To dock, the vehicle's entire
+        /// footprint must fit on passable cells and end next to that station.
+        /// VF is still the final authority on reachability and movement.
         /// </summary>
         private bool TryGetDockingCell(Building_TransitStop stop, Thing vehicle,
-            out IntVec3 destination)
+            HashSet<IntVec3> excluded, out IntVec3 destination)
         {
             destination = IntVec3.Invalid;
+            int radius = Math.Max(5, Math.Max(vehicle.def.size.x, vehicle.def.size.z) + 3);
             float best = float.MaxValue;
-            IntVec3 at = stop.Position;
-            for (int dx = -4; dx <= 4; dx++)
-            for (int dz = -4; dz <= 4; dz++)
+            IntVec3 station = stop.Position;
+            for (int dx = -radius; dx <= radius; dx++)
+            for (int dz = -radius; dz <= radius; dz++)
             {
-                int radiusSquared = dx * dx + dz * dz;
-                if (radiusSquared < 4 || radiusSquared > 20) continue;
-                IntVec3 cell = new IntVec3(at.x + dx, 0, at.z + dz);
-                if (!cell.InBounds(map) || !cell.Standable(map)) continue;
-                if (cell == at) continue;
-                float distance = cell.DistanceToSquared(vehicle.Position);
-                if (distance < best) { best = distance; destination = cell; }
+                IntVec3 root = new IntVec3(station.x + dx, 0, station.z + dz);
+                if (!root.InBounds(map) || (excluded != null && excluded.Contains(root))) continue;
+                CellRect footprint = GenAdj.OccupiedRect(root, vehicle.Rotation, vehicle.def.size);
+                if (!footprint.InBounds(map)) continue;
+                int gap = FootprintGap(footprint, station);
+                // Prefer true side-adjacency. Allow one extra cell only if
+                // no accessible adjacent placement is available.
+                if (gap < 1 || gap > 2) continue;
+                if (!FootprintCanPark(footprint, vehicle)) continue;
+                float score = gap * 10000f
+                    + root.DistanceToSquared(vehicle.Position)
+                    + (dx * dx + dz * dz) * 0.02f;
+                if (score < best) { best = score; destination = root; }
             }
             return destination.IsValid;
+        }
+
+        private bool FootprintCanPark(CellRect rect, Thing vehicle)
+        {
+            foreach (IntVec3 cell in rect.Cells)
+            {
+                if (!cell.InBounds(map) || !cell.Standable(map)) return false;
+                foreach (Thing occupant in cell.GetThingList(map))
+                    if (occupant != vehicle && VehicleAdapter.IsVehicle(occupant))
+                        return false;
+            }
+            return true;
+        }
+
+        private static int FootprintGap(CellRect occupied, IntVec3 station)
+        {
+            int dx = station.x < occupied.minX ? occupied.minX - station.x
+                : station.x > occupied.maxX ? station.x - occupied.maxX : 0;
+            int dz = station.z < occupied.minZ ? occupied.minZ - station.z
+                : station.z > occupied.maxZ ? station.z - occupied.maxZ : 0;
+            return dx + dz;
+        }
+
+        private static int DistanceFromBodyToStop(Thing vehicle, Building_TransitStop stop)
+        {
+            return FootprintGap(vehicle.OccupiedRect(), stop.Position);
+        }
+
+        private static bool IsBesideStop(Thing vehicle, Building_TransitStop stop)
+        {
+            return DistanceFromBodyToStop(vehicle, stop) == 1;
         }
 
         private bool AllStopsValid(TransitRoute route)

@@ -243,6 +243,7 @@ namespace PublicTransit.Core
             switch (route.RunState)
             {
                 case TransitRunState.WaitingForDriver: return "PT_DriveWaitingDriver".Translate();
+                case TransitRunState.WaitingForEngine: return "PT_DriveWaitingEngine".Translate();
                 case TransitRunState.Moving:
                     string stopName = route.NextStopIndex >= 0 && route.NextStopIndex < route.Stops.Count
                         ? route.Stops[route.NextStopIndex]?.StopName ?? "?" : "?";

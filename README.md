@@ -4,6 +4,7 @@
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
 **Status: experimental bootstrap / not playable yet** · **Target: RimWorld 1.6**
  HEAD
 Мод для будущей автоматической сети общественного транспорта: фиксированные маршруты и остановки, самостоятельная посадка и высадка колонистов, пересадки, сохранение исходных заданий.
@@ -19,6 +20,9 @@
 >>>>>>> theirs
 =======
 **Status: 0.4.0-dev / vehicle assignment safety** · **Target: RimWorld 1.6**
+>>>>>>> theirs
+=======
+**Status: 0.4.1-dev / vehicle assignment safety** · **Target: RimWorld 1.6**
 >>>>>>> theirs
 
 Мод для будущей автоматической сети общественного транспорта. На текущем этапе реализованы **остановки, линии и назначение транспорта**. Пока без движения машин, пассажирского ИИ и расписаний. Ведущая техника берётся из модов, основанных на [Vehicle Framework](https://github.com/SmashPhil/Vehicle-Framework).
@@ -57,7 +61,7 @@ python tools/package_mod.py --version dev
 >>>>>>> theirs
 =======
 
-## Experimental road vehicle loop (0.4.0-dev)
+## Experimental road vehicle loop (0.4.1-dev)
 
 Once a vehicle is assigned to a line with at least two stops, manually board a
 conscious player-controlled pawn into its VF driver role and select **Start line**
@@ -72,4 +76,13 @@ Passenger AI and `JobDriver_TransitDriver` are not implemented yet. Locomotives
 can be assigned but automated train travel is intentionally disabled until we
 implement coupled consist and rails support. The nearest suitable docking cell
 heuristic is temporary and may require road adjustments.
+<<<<<<< ours
+>>>>>>> theirs
+=======
+
+### 0.4.1: Why the vehicle sometimes stopped early
+
+The first movement prototype selected a cell that a **pawn** could stand on and measured arrival from the vehicle's origin. This fails for multi-cell vehicles. The controller now proposes anchors whose **whole** footprint can fit near the stop, and only declares arrival when the actual vehicle body is adjacent. Vehicle Framework remains responsible for final pathfinding.
+
+If the engine is off, Public Transit tries to switch on the VF ignition controller **only when a living driver occupies the driving role**. If the installed VF build does not expose a compatible setter, the line waits for manual ignition instead of falsely reporting a road obstruction. The engine stays on when stopping the service; the player can switch it off in VF.
 >>>>>>> theirs

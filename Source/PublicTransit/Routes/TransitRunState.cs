@@ -8,6 +8,7 @@ namespace PublicTransit.Routes
         Dwelling,
         Moving,
         Blocked,
-        Recovering
+        Recovering,
+        WaitingForEngine
     }
 }

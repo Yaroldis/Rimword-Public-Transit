@@ -1,3 +1,12 @@
+## 0.4.1-dev — Docking and ignition hotfix (2026-11-07)
+
+- Road vehicles now select a parking anchor using their entire rotated footprint, preferring cells immediately adjacent to a stop rather than the nearest pawn-walkable cell.
+- Arrival uses the distance between the vehicle's occupied rectangle and the stop, not the vehicle origin versus a target root.
+- When VF ends a path before docking, the dispatcher makes at most two attempts with different docking cells, then stops with detailed diagnostics.
+- An occupied driver seat is still mandatory. The adapter now attempts to enable ignition using VF's ignition controller, and waits without falsely reporting a blocked road if VF cannot start the engine.
+- The engine is **not forcibly switched off** when the line stops; this stays under player/VF control.
+- This version is experimental. VF 1.6.2144 API behavior and in-game movement require testing via CI and RimWorld.
+
 ## 0.4.0-dev — experimental driver-required road vehicle movement
 
 - Opt-in Start/Stop button for each route; boarding a driver is still manual via VF.
