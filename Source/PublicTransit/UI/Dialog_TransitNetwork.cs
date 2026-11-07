@@ -128,7 +128,7 @@ namespace PublicTransit.UI
         private void DrawVehicleAssignment(TransitMapComponent network, TransitRoute route, float width, ref float y)
         {
             Thing vehicle = route.AssignedVehicle;
-            string vehicleName = vehicle == null ? "PT_NoVehicle".Translate() : vehicle.LabelCap;
+            string vehicleName = vehicle == null ? "PT_NoVehicle".Translate().ToString() : vehicle.LabelCap;
             Widgets.Label(new Rect(28f, y + 2f, width - 330f, 26f),
                 "PT_VehicleOnRoute".Translate(vehicleName));
 
