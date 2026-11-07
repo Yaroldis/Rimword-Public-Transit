@@ -3,8 +3,8 @@
   <name>Public Transit</name>
   <author>Public Transit Contributors</author>
   <packageId>RimTransit.PublicTransit</packageId>
-  <description>Early development build for RimWorld 1.6. Adds nameable stops and an editor for ordered public transit lines. Vehicles and passengers are not automated yet.</description>
-  <modVersion>0.2.0-dev</modVersion>
+  <description>Development build for RimWorld 1.6. Adds named stops, ordered public transit lines, and assignment of player-owned Vehicle Framework vehicles to lines. No automated driving or passenger AI yet.</description>
+  <modVersion>0.3.0-dev</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>

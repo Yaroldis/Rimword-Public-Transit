@@ -20,9 +20,17 @@ Do **not** prune route references in `MapComponent.FinalizeInit` before Scribe r
 
 `Building_TransitStop.DeSpawn` notifies `TransitMapComponent` while `Map` is still available. The unregister logic removes that stop from all route lists. It does not destroy empty lines, avoiding accidental user data loss.
 
+## Added in 0.3.0-dev: vehicle assignments
+
+- `Core/VehicleAdapter`: readonly recognition of VF vehicles (`Vehicles.VehiclePawn`, including subclasses) via the runtime type inheritance chain. No VF DLL is copied or referenced at compile time. `CanAssign` requires a live, spawned, player-owned vehicle on this map.
+- `TransitRoute.AssignedVehicle`: optional `Thing` reference, stored with `Scribe_References.Look` under new key `assignedVehicle`; existing save keys and data remain unchanged.
+- `TransitMapComponent`: owns vehicle assignment changes; enforces one vehicle per line (and one line per vehicle), handles destroyed vehicle cleanup every 250 ticks, retains temporarily off-map references. Duplicates are repaired only in `PostLoadInit`.
+- `Dialog_TransitNetwork`: assignment controls and availability/status information. A train/vehicle mod is not required for the static editor, but a VF content mod is required to see vehicles.
+- No driving, pathfinding, passenger slots, or rail coupling integration yet. A vehicle is **assignable**, not necessarily a valid passenger shuttle; that check comes in a future stage.
+
 ### Compatibility
 
-No Harmony patches are applied. The mod metadata still depends on VF and Harmony, but this stage does not access their APIs. A transport adapter will be isolated from routing and UI.
+No Harmony patches are applied. The mod metadata still depends on VF and Harmony, but this stage does not access their APIs. The read-only vehicle adapter is isolated from routing and UI; future VF-specific movement commands must go there too.
 
 ## Vehicle Framework research checkpoint
 
@@ -30,7 +38,7 @@ Smash Phil discussed `LordJob_TravelWithVehicle` on 15 October 2026 as an experi
 
 ## Not implemented
 
-Schedules, passengers, commuting decisions, vehicles, dispatch, drawing a route map overlay, cross-map network, or synchronization with group travel systems.
+Schedules, passengers, commuting decisions, vehicle movement, passenger eligibility, dispatch, drawing a route map overlay, cross-map network, or synchronization with group travel systems.
 
 ## Testing
 

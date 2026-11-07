@@ -10,7 +10,7 @@
   <PT_OpenNetworkDesc>Open the line editor and arrange stops.</PT_OpenNetworkDesc>
   <PT_DefaultRouteName>Line {0}</PT_DefaultRouteName>
   <PT_NetworkSummary>Transit network — {0} lines, {1} stops</PT_NetworkSummary>
-  <PT_NetworkHint>Lines do not move vehicles yet. Arrange the stops in order.</PT_NetworkHint>
+  <PT_NetworkHint>You can assign vehicles. Automatic driving and boarding are not implemented yet.</PT_NetworkHint>
   <PT_NoMap>No available map.</PT_NoMap>
   <PT_EmptyNetwork>No lines yet. Select a stop and create the first line.</PT_EmptyNetwork>
   <PT_NoStops>Build at least one stop first.</PT_NoStops>
@@ -24,4 +24,22 @@
   <PT_Remove>Remove</PT_Remove>
   <PT_Cancel>Cancel</PT_Cancel>
   <PT_Save>Save</PT_Save>
+  <PT_VehicleOnRoute>Vehicle: {0}</PT_VehicleOnRoute>
+  <PT_NoVehicle>not assigned</PT_NoVehicle>
+  <PT_AssignVehicle>Assign</PT_AssignVehicle>
+  <PT_ChangeVehicle>Change</PT_ChangeVehicle>
+  <PT_UnassignVehicle>Unassign</PT_UnassignVehicle>
+  <PT_VehicleState>Status: {0}</PT_VehicleState>
+  <PT_VehicleStatusNone>awaiting vehicle assignment</PT_VehicleStatusNone>
+  <PT_VehicleStatusDestroyed>vehicle destroyed; assignment will be cleared</PT_VehicleStatusDestroyed>
+  <PT_VehicleStatusInvalid>object is not a VF vehicle</PT_VehicleStatusInvalid>
+  <PT_VehicleStatusOffMap>vehicle off-map; assignment retained</PT_VehicleStatusOffMap>
+  <PT_VehicleStatusNotOwned>vehicle is no longer player-owned</PT_VehicleStatusNotOwned>
+  <PT_VehicleStatusNeedStops>route needs at least two stops</PT_VehicleStatusNeedStops>
+  <PT_VehicleStatusReady>assigned; automatic driving is not implemented yet</PT_VehicleStatusReady>
+  <PT_VehicleRouteMissing>The line no longer exists.</PT_VehicleRouteMissing>
+  <PT_VehicleInvalid>Vehicle is unavailable, not player-owned or not recognized as a VF vehicle.</PT_VehicleInvalid>
+  <PT_VehicleAlreadyAssigned>This vehicle is already assigned to another line.</PT_VehicleAlreadyAssigned>
+  <PT_VehicleOption>{0} (cell: {1}, {2})</PT_VehicleOption>
+  <PT_NoAssignableVehicles>No unassigned VF vehicles are available on this map.</PT_NoAssignableVehicles>
 </LanguageData>

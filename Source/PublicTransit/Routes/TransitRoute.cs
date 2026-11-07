@@ -13,6 +13,9 @@ namespace PublicTransit.Routes
         private string id;
         private string displayName;
         private List<Building_TransitStop> stops = new List<Building_TransitStop>();
+        // Save a reference to the actual VF vehicle, never the vehicle itself.
+        // The vehicle belongs to RimWorld / Vehicle Framework, not this route.
+        private Thing assignedVehicle;
 
         public TransitRoute() { } // Scribe requires a parameterless constructor.
 
@@ -25,6 +28,11 @@ namespace PublicTransit.Routes
         public string Id => id;
         public string DisplayName => displayName;
         public IReadOnlyList<Building_TransitStop> Stops => stops;
+        public Thing AssignedVehicle => assignedVehicle;
+
+        // Only TransitMapComponent changes assignments: it validates ownership,
+        // map and exclusivity across all lines.
+        internal void SetAssignedVehicle(Thing vehicle) => assignedVehicle = vehicle;
 
         public void Rename(string name)
         {
@@ -67,6 +75,7 @@ namespace PublicTransit.Routes
             Scribe_Values.Look(ref id, "id");
             Scribe_Values.Look(ref displayName, "displayName");
             Scribe_Collections.Look(ref stops, "stops", LookMode.Reference);
+            Scribe_References.Look(ref assignedVehicle, "assignedVehicle");
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
                 if (stops == null) stops = new List<Building_TransitStop>();

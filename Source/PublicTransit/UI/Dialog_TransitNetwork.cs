@@ -11,7 +11,7 @@ namespace PublicTransit.UI
 {
     /// <summary>
     /// A first, intentionally simple editor for a network of ordered stops.
-    /// Routes only describe geography; nothing drives or boards vehicles yet.
+    /// Routes can now reference a VF vehicle, but do not drive or board it yet.
     /// </summary>
     public sealed class Dialog_TransitNetwork : Window
     {
@@ -46,7 +46,7 @@ namespace PublicTransit.UI
             float viewWidth = scrollRect.width - 20f;
             float height = 10f;
             foreach (TransitRoute route in network.Routes)
-                height += 54f + Math.Max(1, route.Stops.Count) * 28f;
+                height += 112f + Math.Max(1, route.Stops.Count) * 28f;
             height = Math.Max(scrollRect.height, height);
 
             Widgets.BeginScrollView(scrollRect, ref scrollPosition, new Rect(0f, 0f, viewWidth, height));
@@ -96,6 +96,7 @@ namespace PublicTransit.UI
                     () => network.RemoveRoute(route)));
             }
             y += 38f;
+            DrawVehicleAssignment(network, route, width, ref y);
 
             if (route.Stops.Count == 0)
             {
@@ -122,6 +123,50 @@ namespace PublicTransit.UI
                 }
             }
             y += 16f;
+        }
+
+        private void DrawVehicleAssignment(TransitMapComponent network, TransitRoute route, float width, ref float y)
+        {
+            Thing vehicle = route.AssignedVehicle;
+            string vehicleName = vehicle == null ? "PT_NoVehicle".Translate() : vehicle.LabelCap;
+            Widgets.Label(new Rect(28f, y + 2f, width - 330f, 26f),
+                "PT_VehicleOnRoute".Translate(vehicleName));
+
+            string actionLabel = vehicle == null ? "PT_AssignVehicle".Translate() : "PT_ChangeVehicle".Translate();
+            if (Widgets.ButtonText(new Rect(width - 297f, y, 152f, 26f), actionLabel))
+                ChooseVehicle(network, route);
+
+            if (vehicle != null && Widgets.ButtonText(new Rect(width - 139f, y, 133f, 26f),
+                "PT_UnassignVehicle".Translate()))
+                network.UnassignVehicle(route);
+
+            y += 30f;
+            Widgets.Label(new Rect(28f, y + 1f, width - 34f, 23f),
+                "PT_VehicleState".Translate(network.GetVehicleStatus(route)));
+            y += 30f;
+        }
+
+        private static void ChooseVehicle(TransitMapComponent network, TransitRoute route)
+        {
+            var options = new List<FloatMenuOption>();
+            foreach (Thing vehicle in network.GetAssignableVehicles(route))
+            {
+                if (vehicle == route.AssignedVehicle) continue;
+                Thing candidate = vehicle;
+                string name = "PT_VehicleOption".Translate(candidate.LabelCap,
+                    candidate.Position.x, candidate.Position.z);
+                options.Add(new FloatMenuOption(name, () =>
+                {
+                    if (!network.TryAssignVehicle(route, candidate, out string error))
+                        Messages.Message(error, MessageTypeDefOf.RejectInput, false);
+                }));
+            }
+            if (options.Count == 0)
+            {
+                Messages.Message("PT_NoAssignableVehicles".Translate(), MessageTypeDefOf.RejectInput, false);
+                return;
+            }
+            Find.WindowStack.Add(new FloatMenu(options));
         }
 
         private static void ChooseStop(TransitMapComponent network, TransitRoute route)
