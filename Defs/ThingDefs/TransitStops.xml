@@ -18,10 +18,10 @@
     <scatterableOnMapGen>false</scatterableOnMapGen>
     <designationCategory>Misc</designationCategory>
     <costList>
-      <Steel>15</Steel>
+      <Steel>150</Steel>
     </costList>
     <statBases>
-      <WorkToBuild>60</WorkToBuild>
+      <WorkToBuild>200</WorkToBuild>
     </statBases>
   </ThingDef>
 </Defs>
