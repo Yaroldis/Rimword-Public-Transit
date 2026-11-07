@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Static checks without RimWorld, Unity or the .NET SDK."""
+from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def main():
+    xml_files = sorted(ROOT.rglob("*.xml"))
+    # Ignore generated binaries/obj files when validating locally.
+    xml_files = [p for p in xml_files if not any(x in ("bin", "obj") for x in p.parts)]
+    require(xml_files, "No XML files were found")
+    for file in xml_files:
+        ET.parse(file)
+
+    about = ET.parse(ROOT / "About" / "About.xml").getroot()
+    require(about.tag == "ModMetaData", "About.xml: expected ModMetaData root")
+    require(about.findtext("packageId") == "RimTransit.PublicTransit", "Unexpected packageId")
+    versions = [n.text for n in about.findall("supportedVersions/li")]
+    require(versions == ["1.6"], f"Target version must be 1.6 only: {versions}")
+    deps = {n.text.lower() for n in about.findall("modDependencies/li/packageId") if n.text}
+    require({"brrainz.harmony", "smashphil.vehicleframework"} <= deps, "Missing required dependency")
+
+    defs = ET.parse(ROOT / "Defs" / "ThingDefs" / "TransitStops.xml").getroot()
+    stop = next((n for n in defs.findall("ThingDef") if n.findtext("defName") == "PT_TransitStop"), None)
+    require(stop is not None, "PT_TransitStop ThingDef not found")
+    require(stop.findtext("thingClass") == "PublicTransit.Buildings.Building_TransitStop", "Invalid stop class name")
+    texture = ROOT / "Textures" / (stop.findtext("graphicData/texPath") + ".png")
+    require(texture.exists(), f"Stop texture is missing: {texture}")
+    require(texture.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"), "Stop texture is not PNG")
+
+    project = ET.parse(ROOT / "Source" / "PublicTransit" / "PublicTransit.csproj").getroot()
+    require(project.findtext("PropertyGroup/TargetFramework") == "net472", "Wrong target framework")
+    references = {n.attrib.get("Include"): n.attrib.get("Version") for n in project.findall("ItemGroup/PackageReference")}
+    require(references.get("Krafs.Rimworld.Ref") == "1.6.4871", "Wrong reference package")
+    print(f"OK: {len(xml_files)} XML files, About.xml, RimWorld 1.6, VF/Harmony, texture, C# config")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, ET.ParseError, OSError) as exc:
+        print(f"VALIDATION FAILED: {exc}", file=sys.stderr)
+        sys.exit(1)

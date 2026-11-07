@@ -1,0 +1,23 @@
+# Compilation
+**/bin/
+**/obj/
+1.6/Assemblies/*.dll
+1.6/Assemblies/*.pdb
+1.6/Assemblies/*.xml
+*.user
+*.suo
+.vs/
+.idea/
+_ReSharper*/
+*.DotSettings.user
+# Local packages and game files
+packages/
+*.nupkg
+# Packaging output
+/dist/
+# Python
+__pycache__/
+*.pyc
+# OS
+.DS_Store
+Thumbs.db

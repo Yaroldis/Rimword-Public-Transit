@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <PT_TransitStop.label>остановка (прототип)</PT_TransitStop.label>
+  <PT_TransitStop.description>Обозначает будущую остановку общественного транспорта. На этом этапе посадка колонистов ещё не реализована.</PT_TransitStop.description>
+</LanguageData>

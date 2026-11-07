@@ -1,0 +1,41 @@
+name: CI (RimWorld 1.6)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate XML, dependencies and assets
+        run: python tools/validate_mod.py
+
+  build:
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore reference assemblies
+        run: dotnet restore Source/PublicTransit/PublicTransit.csproj
+      - name: Compile mod (net472)
+        run: dotnet build Source/PublicTransit/PublicTransit.csproj -c Release --no-restore
+      - name: Package mod for installation
+        run: python tools/package_mod.py --version ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PublicTransit-1.6-ci
+          path: dist/PublicTransit-ci.zip
+          if-no-files-found: error

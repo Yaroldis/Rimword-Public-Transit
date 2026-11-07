@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <ThingDef ParentName="BuildingBase">
+    <defName>PT_TransitStop</defName>
+    <label>transit stop (prototype)</label>
+    <description>Marks a future public transport stop. At this stage, colonists cannot board vehicles here.</description>
+    <thingClass>PublicTransit.Buildings.Building_TransitStop</thingClass>
+    <graphicData>
+      <texPath>Things/Building/TransitStop</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawSize>(1,1)</drawSize>
+    </graphicData>
+    <altitudeLayer>FloorEmplacement</altitudeLayer>
+    <size>(1,1)</size>
+    <passability>Standable</passability>
+    <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
+    <useHitPoints>false</useHitPoints>
+    <scatterableOnMapGen>false</scatterableOnMapGen>
+    <designationCategory>Misc</designationCategory>
+    <costList>
+      <Steel>15</Steel>
+    </costList>
+    <statBases>
+      <WorkToBuild>60</WorkToBuild>
+    </statBases>
+  </ThingDef>
+</Defs>
