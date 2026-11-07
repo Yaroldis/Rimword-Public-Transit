@@ -41,6 +41,15 @@ def main():
     require(project.findtext("PropertyGroup/TargetFramework") == "net472", "Wrong target framework")
     references = {n.attrib.get("Include"): n.attrib.get("Version") for n in project.findall("ItemGroup/PackageReference")}
     require(references.get("Krafs.Rimworld.Ref") == "1.6.4871", "Wrong reference package")
+    # Prevent missing C# class files in Git patches (regression from 0.3.1).
+    for relative in (
+        "Source/PublicTransit/PublicTransitSettings.cs",
+        "Source/PublicTransit/Core/TransitMapComponent.cs",
+        "Source/PublicTransit/Core/TransitVehicleController.cs",
+        "Source/PublicTransit/Core/VehicleAdapter.cs",
+        "Source/PublicTransit/Routes/TransitRunState.cs",
+    ):
+        require((ROOT / relative).is_file(), f"Required C# file missing: {relative}")
     # Verify every keyed translation used in C# exists in both languages.
     keyed = {}
     for language in ("Russian", "English"):

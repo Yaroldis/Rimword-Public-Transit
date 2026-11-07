@@ -15,6 +15,9 @@ namespace PublicTransit.Core
     {
         private List<TransitRoute> routes = new List<TransitRoute>();
         private readonly HashSet<Building_TransitStop> registeredStops = new HashSet<Building_TransitStop>();
+        private TransitVehicleController driving;
+        private TransitVehicleController Driving => driving ??
+            (driving = new TransitVehicleController(map));
 
         public TransitMapComponent(Map map) : base(map) { }
 
@@ -40,7 +43,11 @@ namespace PublicTransit.Core
             registeredStops.Remove(stop);
             if (routes == null) return;
             foreach (TransitRoute route in routes)
-                route?.RemoveStop(stop);
+            {
+                if (route == null || !route.ContainsStop(stop)) continue;
+                Driving.Stop(route); // A service must not pursue a demolished stop.
+                route.RemoveStop(stop);
+            }
         }
 
         public TransitRoute CreateRoute(string displayName, Building_TransitStop firstStop = null)
@@ -52,7 +59,34 @@ namespace PublicTransit.Core
             return route;
         }
 
-        public bool RemoveRoute(TransitRoute route) => route != null && routes != null && routes.Remove(route);
+        public bool RemoveRoute(TransitRoute route)
+        {
+            if (route == null || routes == null || !routes.Contains(route)) return false;
+            Driving.Stop(route);
+            return routes.Remove(route);
+        }
+
+        public bool TryStartService(TransitRoute route, out string error)
+        {
+            error = null;
+            if (route == null || routes == null || !routes.Contains(route))
+            {
+                error = "PT_VehicleRouteMissing".Translate().ToString();
+                return false;
+            }
+            if (route.AssignedVehicle != null && IsVehicleOverDamageThreshold(route.AssignedVehicle))
+            {
+                error = "PT_VehicleTooDamagedToAssign".Translate().ToString();
+                return false;
+            }
+            return Driving.TryEnable(route, out error);
+        }
+
+        public void StopService(TransitRoute route)
+        {
+            if (route != null && routes != null && routes.Contains(route))
+                Driving.Stop(route);
+        }
 
         /// <summary>
         /// Find eligible vehicles from any mod based on Vehicle Framework.
@@ -112,6 +146,7 @@ namespace PublicTransit.Core
                 return false;
             }
 
+            Driving.Stop(route); // Changing vehicles while moving must halt the old one.
             route.SetAssignedVehicle(vehicle);
             return true;
         }
@@ -119,7 +154,10 @@ namespace PublicTransit.Core
         public void UnassignVehicle(TransitRoute route)
         {
             if (route != null && routes != null && routes.Contains(route))
+            {
+                Driving.Stop(route);
                 route.SetAssignedVehicle(null);
+            }
         }
 
         /// <summary>
@@ -139,6 +177,7 @@ namespace PublicTransit.Core
                 if ((checkActiveVehicles && vehicle.Destroyed) || !VehicleAdapter.IsVehicle(vehicle)
                     || !seen.Add(vehicle))
                 {
+                    if (checkActiveVehicles) Driving.Stop(route);
                     route.SetAssignedVehicle(null);
                     continue;
                 }
@@ -148,6 +187,7 @@ namespace PublicTransit.Core
 
                 if (!VehicleAdapter.IsRouteLeader(vehicle) || vehicle.Faction != Faction.OfPlayer)
                 {
+                    if (checkActiveVehicles) Driving.Stop(route);
                     route.SetAssignedVehicle(null);
                     continue;
                 }
@@ -157,6 +197,7 @@ namespace PublicTransit.Core
                 if (VehicleAdapter.TryGetWorstComponentHealth(vehicle, out fraction, out component)
                     && 1f - fraction >= PublicTransitMod.DamageUnassignThreshold)
                 {
+                    Driving.Stop(route);
                     route.SetAssignedVehicle(null);
                     int percent = (int)Math.Round((1f - fraction) * 100f);
                     Messages.Message("PT_VehicleAutoUnassignedDamage".Translate(
@@ -178,8 +219,13 @@ namespace PublicTransit.Core
         {
             base.MapComponentTick();
             // Only once per 250 game ticks, never for every pawn every tick.
-            if (Find.TickManager.TicksGame % 250 == 0)
+            int tick = Find.TickManager.TicksGame;
+            if (tick % 250 == 0)
                 RepairVehicleAssignments(true);
+            if (tick % 30 == 0 && routes != null)
+                foreach (TransitRoute route in routes)
+                    if (route != null && route.ServiceEnabled)
+                        Driving.TickRoute(route, tick);
         }
 
         public string GetVehicleStatus(TransitRoute route)
@@ -193,7 +239,19 @@ namespace PublicTransit.Core
             if (vehicle.Faction != Faction.OfPlayer) return "PT_VehicleStatusNotOwned".Translate();
             if (IsVehicleOverDamageThreshold(vehicle)) return "PT_VehicleStatusDamaged".Translate();
             if (route.Stops.Count < 2) return "PT_VehicleStatusNeedStops".Translate();
-            return "PT_VehicleStatusReady".Translate();
+            if (VehicleAdapter.IsTrain(vehicle)) return "PT_DriveTrainPending".Translate();
+            switch (route.RunState)
+            {
+                case TransitRunState.WaitingForDriver: return "PT_DriveWaitingDriver".Translate();
+                case TransitRunState.Moving:
+                    string stopName = route.NextStopIndex >= 0 && route.NextStopIndex < route.Stops.Count
+                        ? route.Stops[route.NextStopIndex]?.StopName ?? "?" : "?";
+                    return "PT_DriveMovingTo".Translate(stopName);
+                case TransitRunState.Dwelling: return "PT_DriveDwelling".Translate();
+                case TransitRunState.Recovering: return "PT_DriveRecovering".Translate();
+                case TransitRunState.Blocked: return "PT_DriveBlocked".Translate();
+                default: return "PT_DriveStopped".Translate();
+            }
         }
 
         public bool IsValidStop(Building_TransitStop stop) =>

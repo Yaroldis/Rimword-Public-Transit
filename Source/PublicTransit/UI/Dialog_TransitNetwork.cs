@@ -11,7 +11,7 @@ namespace PublicTransit.UI
 {
     /// <summary>
     /// A first, intentionally simple editor for a network of ordered stops.
-    /// Routes can now reference a VF vehicle, but do not drive or board it yet.
+    /// 0.4.0 adds opt-in autonomous driving; boarding remains manual.
     /// </summary>
     public sealed class Dialog_TransitNetwork : Window
     {
@@ -46,7 +46,7 @@ namespace PublicTransit.UI
             float viewWidth = scrollRect.width - 20f;
             float height = 10f;
             foreach (TransitRoute route in network.Routes)
-                height += 112f + Math.Max(1, route.Stops.Count) * 28f;
+                height += 144f + Math.Max(1, route.Stops.Count) * 28f;
             height = Math.Max(scrollRect.height, height);
 
             Widgets.BeginScrollView(scrollRect, ref scrollPosition, new Rect(0f, 0f, viewWidth, height));
@@ -114,11 +114,20 @@ namespace PublicTransit.UI
                     Widgets.Label(new Rect(28f, y, width - 182f, 26f),
                         (i + 1) + ". " + (stop == null ? "?" : stop.StopName));
                     if (Widgets.ButtonText(new Rect(width - 148f, y, 38f, 25f), "↑"))
+                    {
+                        network.StopService(route);
                         route.MoveStop(stopIndex, -1);
+                    }
                     if (Widgets.ButtonText(new Rect(width - 106f, y, 38f, 25f), "↓"))
+                    {
+                        network.StopService(route);
                         route.MoveStop(stopIndex, 1);
+                    }
                     if (Widgets.ButtonText(new Rect(width - 64f, y, 58f, 25f), "PT_Remove".Translate()))
+                    {
+                        network.StopService(route);
                         route.RemoveStop(stop);
+                    }
                     y += 28f;
                 }
             }
@@ -144,6 +153,19 @@ namespace PublicTransit.UI
             Widgets.Label(new Rect(28f, y + 1f, width - 34f, 23f),
                 "PT_VehicleState".Translate(network.GetVehicleStatus(route)));
             y += 30f;
+
+            string serviceAction = route.ServiceEnabled
+                ? "PT_DriveStop".Translate().ToString()
+                : "PT_DriveStart".Translate().ToString();
+            if (Widgets.ButtonText(new Rect(28f, y, 172f, 27f), serviceAction))
+            {
+                if (route.ServiceEnabled) network.StopService(route);
+                else if (!network.TryStartService(route, out string error))
+                    Messages.Message(error, MessageTypeDefOf.RejectInput, false);
+            }
+            Widgets.Label(new Rect(214f, y + 2f, width - 224f, 26f),
+                "PT_DriveManualDriverHint".Translate());
+            y += 32f;
         }
 
         private static void ChooseVehicle(TransitMapComponent network, TransitRoute route)
@@ -178,7 +200,11 @@ namespace PublicTransit.UI
                 Building_TransitStop candidate = stop;
                 options.Add(new FloatMenuOption(candidate.StopName, () =>
                 {
-                    if (network.IsValidStop(candidate)) route.AddStop(candidate);
+                    if (network.IsValidStop(candidate))
+                    {
+                        network.StopService(route);
+                        route.AddStop(candidate);
+                    }
                 }));
             }
             if (options.Count == 0)

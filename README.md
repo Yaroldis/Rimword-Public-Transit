@@ -3,6 +3,7 @@
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
 **Status: experimental bootstrap / not playable yet** · **Target: RimWorld 1.6**
  HEAD
 Мод для будущей автоматической сети общественного транспорта: фиксированные маршруты и остановки, самостоятельная посадка и высадка колонистов, пересадки, сохранение исходных заданий.
@@ -15,6 +16,9 @@
 >>>>>>> theirs
 =======
 **Status: 0.3.1-dev / vehicle assignment safety** · **Target: RimWorld 1.6**
+>>>>>>> theirs
+=======
+**Status: 0.4.0-dev / vehicle assignment safety** · **Target: RimWorld 1.6**
 >>>>>>> theirs
 
 Мод для будущей автоматической сети общественного транспорта. На текущем этапе реализованы **остановки, линии и назначение транспорта**. Пока без движения машин, пассажирского ИИ и расписаний. Ведущая техника берётся из модов, основанных на [Vehicle Framework](https://github.com/SmashPhil/Vehicle-Framework).
@@ -49,4 +53,23 @@ python tools/package_mod.py --version dev
 Сборка в CI не требует копировать игровые DLL в репозиторий: используется `Krafs.Rimworld.Ref 1.6.4871`. Для игровых тестов требуется RimWorld 1.6, Harmony и VF.
 
 **Пакет мода:** `RimTransit.PublicTransit` (не менять без миграции). Автор и лицензию согласуем перед публикацией.
+<<<<<<< ours
+>>>>>>> theirs
+=======
+
+## Experimental road vehicle loop (0.4.0-dev)
+
+Once a vehicle is assigned to a line with at least two stops, manually board a
+conscious player-controlled pawn into its VF driver role and select **Start line**
+from the Transit network UI. The controller targets free cells near each stop,
+waits briefly at arrival, then advances to the next stop. **Stop line** immediately
+requests a VF halt.
+
+This requires a compatible VF 1.6 vehicle path follower. If movement / safe stop
+methods do not exist in the installed VF build, the line refuses to start rather
+than bypass safety checks. Use a clear, wide road and a small VVE vehicle first.
+Passenger AI and `JobDriver_TransitDriver` are not implemented yet. Locomotives
+can be assigned but automated train travel is intentionally disabled until we
+implement coupled consist and rails support. The nearest suitable docking cell
+heuristic is temporary and may require road adjustments.
 >>>>>>> theirs

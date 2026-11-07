@@ -1,3 +1,14 @@
+## 0.4.0-dev — experimental driver-required road vehicle movement
+
+- Opt-in Start/Stop button for each route; boarding a driver is still manual via VF.
+- `TransitVehicleController`: per-line state machine (waiting for driver / moving / dwelling / blocked).
+- Adapter attempts to drive via VF's `vehiclePather.StartPath`, with compatible signature discovery and fail-closed feature detection; requires a supported stop method.
+- A vehicle is never dispatched without an occupied driver role; loss of the driver attempts to stop the vehicle immediately.
+- Halt routes on edits, vehicle removal, damage threshold, or lost stop; pause instead of issuing infinite move orders.
+- Persist service status and destination through RimWorld saves; handle restoration conservatively.
+- Rail locomotives/railcars remain assignable where permitted by 0.3.1, but no automatic train driving yet.
+- Experimental: intended for verification with VF 1.6.2144 and Vanilla Vehicles Expanded. Actual in-game driving is **not verified**.
+
 # Changelog
 
 ## 0.3.1-dev

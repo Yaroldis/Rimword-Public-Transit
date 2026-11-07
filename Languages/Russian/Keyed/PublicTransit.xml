@@ -10,7 +10,7 @@
   <PT_OpenNetworkDesc>Открыть список линий и изменить порядок остановок.</PT_OpenNetworkDesc>
   <PT_DefaultRouteName>Линия {0}</PT_DefaultRouteName>
   <PT_NetworkSummary>Транспортная сеть — линий: {0}, остановок: {1}</PT_NetworkSummary>
-  <PT_NetworkHint>Назначение транспорта доступно. Автоматического движения и посадки пока нет.</PT_NetworkHint>
+  <PT_NetworkHint>Ручная посадка водителя через VF; линия запускается отдельной кнопкой. Пассажирского ИИ пока нет.</PT_NetworkHint>
   <PT_NoMap>Нет доступной карты.</PT_NoMap>
   <PT_EmptyNetwork>Нет линий. Выберите остановку и создайте первую линию.</PT_EmptyNetwork>
   <PT_NoStops>Сначала постройте хотя бы одну остановку.</PT_NoStops>
@@ -36,7 +36,7 @@
   <PT_VehicleStatusOffMap>транспорт вне карты; назначение сохранено</PT_VehicleStatusOffMap>
   <PT_VehicleStatusNotOwned>транспорт больше не принадлежит колонии</PT_VehicleStatusNotOwned>
   <PT_VehicleStatusNeedStops>для работы линии нужны минимум две остановки</PT_VehicleStatusNeedStops>
-  <PT_VehicleStatusReady>назначен; автоматическое движение ещё не реализовано</PT_VehicleStatusReady>
+  <PT_VehicleStatusReady>назначен; автоматическая линия остановлена</PT_VehicleStatusReady>
   <PT_VehicleRouteMissing>Линия больше не существует.</PT_VehicleRouteMissing>
   <PT_VehicleInvalid>Транспорт недоступен, не принадлежит колонии или не распознан VF.</PT_VehicleInvalid>
   <PT_VehicleAlreadyAssigned>Этот транспорт уже используется другой линией.</PT_VehicleAlreadyAssigned>
@@ -48,4 +48,18 @@
   <PT_VehicleAutoUnassignedDamage>{0} автоматически снят с линии «{1}»: повреждение одного из компонентов достигло {2}%.</PT_VehicleAutoUnassignedDamage>
   <PT_DamageThresholdSetting>Автоматически снимать транспорт при повреждении любого компонента на {0}% или больше.</PT_DamageThresholdSetting>
   <PT_DamageThresholdDescription>Порог относится к каждому компоненту отдельно (не к общему здоровью машины). Повреждённая машина остаётся в игре и может быть отремонтирована. После ремонта назначьте её заново.</PT_DamageThresholdDescription>
+  <PT_DriveStart>Запустить линию</PT_DriveStart>
+  <PT_DriveStop>Остановить линию</PT_DriveStop>
+  <PT_DriveManualDriverHint>Пока водитель садится вручную через VF.</PT_DriveManualDriverHint>
+  <PT_DriveNoVehicle>Сначала назначьте машину на линию.</PT_DriveNoVehicle>
+  <PT_DriveTrainPending>Автоматическое движение поездов пока не поддерживается.</PT_DriveTrainPending>
+  <PT_DriveApiUnsupported>Эта сборка VF не поддерживает безопасное управление: {0}</PT_DriveApiUnsupported>
+  <PT_DriveWaitingDriver>ожидает водителя в водительском месте</PT_DriveWaitingDriver>
+  <PT_DriveMovingTo>движется к остановке «{0}»</PT_DriveMovingTo>
+  <PT_DriveDwelling>стоит на остановке</PT_DriveDwelling>
+  <PT_DriveRecovering>восстанавливает движение после загрузки</PT_DriveRecovering>
+  <PT_DriveBlocked>маршрут заблокирован; перезапустите линию после устранения причины</PT_DriveBlocked>
+  <PT_DriveStopped>машина назначена; линия остановлена</PT_DriveStopped>
+  <PT_DriveBlockedMessage>Линия «{0}» остановлена: проверьте дорогу, водительское место и транспорт.</PT_DriveBlockedMessage>
+  <PT_DriveMissingStop>На линии есть отсутствующая или разрушенная остановка.</PT_DriveMissingStop>
 </LanguageData>

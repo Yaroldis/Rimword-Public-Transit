@@ -17,6 +17,14 @@ namespace PublicTransit.Routes
         // The vehicle belongs to RimWorld / Vehicle Framework, not this route.
         private Thing assignedVehicle;
 
+        // 0.4.0: service is opt-in; route logic persists with the colony save.
+        // A separate controller issues vehicle commands via the VF adapter.
+        private bool serviceEnabled;
+        private TransitRunState runState = TransitRunState.Stopped;
+        private int nextStopIndex;
+        private int dwellUntilTick;
+        private IntVec3 destinationCell = IntVec3.Invalid;
+
         public TransitRoute() { } // Scribe requires a parameterless constructor.
 
         public TransitRoute(string name)
@@ -29,6 +37,22 @@ namespace PublicTransit.Routes
         public string DisplayName => displayName;
         public IReadOnlyList<Building_TransitStop> Stops => stops;
         public Thing AssignedVehicle => assignedVehicle;
+        public bool ServiceEnabled => serviceEnabled;
+        public TransitRunState RunState => runState;
+        public int NextStopIndex => nextStopIndex;
+        public int DwellUntilTick => dwellUntilTick;
+        public IntVec3 DestinationCell => destinationCell;
+
+        internal void SetServiceEnabled(bool enabled)
+        {
+            serviceEnabled = enabled;
+            if (!enabled) SetRunState(TransitRunState.Stopped);
+        }
+
+        internal void SetRunState(TransitRunState state) => runState = state;
+        internal void SetNextStopIndex(int index) => nextStopIndex = index;
+        internal void SetDwellUntilTick(int tick) => dwellUntilTick = tick;
+        internal void SetDestinationCell(IntVec3 cell) => destinationCell = cell;
 
         // Only TransitMapComponent changes assignments: it validates ownership,
         // map and exclusivity across all lines.
@@ -76,11 +100,21 @@ namespace PublicTransit.Routes
             Scribe_Values.Look(ref displayName, "displayName");
             Scribe_Collections.Look(ref stops, "stops", LookMode.Reference);
             Scribe_References.Look(ref assignedVehicle, "assignedVehicle");
+            Scribe_Values.Look(ref serviceEnabled, "PT_serviceEnabled", false);
+            Scribe_Values.Look(ref runState, "PT_runState", TransitRunState.Stopped);
+            Scribe_Values.Look(ref nextStopIndex, "PT_nextStopIndex", 0);
+            Scribe_Values.Look(ref dwellUntilTick, "PT_dwellUntilTick", 0);
+            Scribe_Values.Look(ref destinationCell, "PT_destinationCell", IntVec3.Invalid);
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
                 if (stops == null) stops = new List<Building_TransitStop>();
                 if (string.IsNullOrWhiteSpace(id)) id = Guid.NewGuid().ToString("N");
                 if (string.IsNullOrWhiteSpace(displayName)) displayName = "Route";
+                if (nextStopIndex < 0 || nextStopIndex >= stops.Count) nextStopIndex = 0;
+                // Never restart an old movement command while Scribe is resolving the map.
+                // The map controller will resume or reissue it after the first tick.
+                if (serviceEnabled && runState == TransitRunState.Moving)
+                    runState = TransitRunState.Recovering;
             }
         }
     }

@@ -195,5 +195,204 @@ namespace PublicTransit.Core
                     + type.FullName + " (" + reason + "). Automatic damage unassignment "
                     + "is disabled for this vehicle rather than using an unsafe guess.");
         }
+
+        /// <summary>
+        /// 0.4.0 supports VF road vehicles only. Trains remain assignable, but
+        /// coupled locomotives/railcars need their own pathing adapter later.
+        /// </summary>
+        public static bool IsTrain(Thing thing)
+        {
+            if (!IsVehicle(thing) || thing.def == null) return false;
+            string name = thing.def.modContentPack?.Name ?? string.Empty;
+            string id = thing.def.modContentPack?.PackageId ?? string.Empty;
+            return name.IndexOf("Trains of the Rim", StringComparison.OrdinalIgnoreCase) >= 0
+                || id.IndexOf("trainsoftherim", StringComparison.OrdinalIgnoreCase) >= 0
+                || id.IndexOf("trains.of.the.rim", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
+        /// Only a living, conscious player pawn in a driver/locomotion role
+        /// satisfies the 0.4 driver condition. No "remote/autopilot" fallback.
+        /// The handler layout comes from VF's vehicle save format.
+        /// </summary>
+        public static bool HasActiveDriver(Thing vehicle)
+        {
+            if (!IsVehicle(vehicle)) return false;
+            try
+            {
+                var handlers = ReadMember(vehicle, "handlers", "Handlers") as IEnumerable;
+                if (handlers == null) return false; // fail closed
+                foreach (object handler in handlers)
+                {
+                    if (handler == null || !IsDrivingRole(ReadMember(handler, "role", "Role")))
+                        continue;
+                    var pawns = ReadMember(handler, "thingOwner", "ThingOwner") as IEnumerable;
+                    if (pawns == null) continue;
+                    foreach (object occupant in pawns)
+                    {
+                        var pawn = occupant as Pawn;
+                        if (pawn != null && !pawn.Dead && !pawn.Downed
+                            && pawn.Faction == Faction.OfPlayer)
+                            return true;
+                    }
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[Public Transit] Driver inspection failed: " + ex.GetType().Name);
+                return false;
+            }
+        }
+
+        private static bool IsDrivingRole(object role)
+        {
+            if (role == null) return false;
+            string value = role.ToString() ?? string.Empty;
+            object key = ReadMember(role, "key", "Key", "label", "Label", "defName", "DefName");
+            if (key != null) value += " " + key;
+            // Conservatively recognize actual driving roles, not passenger roles.
+            return ContainsAny(value, "driver", "pilot", "helmsman", "locomotive driver",
+                "train engineer", "водитель", "машинист");
+        }
+
+        /// <summary>
+        /// Verify the VF path follower supports both moving and halting before
+        /// enabling service. Unsupported builds fail closed with a readable reason.
+        /// </summary>
+        public static bool SupportsDriving(Thing vehicle, out string error)
+        {
+            error = null;
+            if (!IsVehicle(vehicle)) { error = "Not a VF vehicle"; return false; }
+            try
+            {
+                object pather = ReadMember(vehicle, "vehiclePather", "VehiclePather");
+                if (pather == null) { error = "VehiclePathFollower missing"; return false; }
+                if (FindStartPath(pather.GetType()) == null)
+                {
+                    error = "VehiclePathFollower.StartPath not supported";
+                    return false;
+                }
+                if (FindStop(pather.GetType()) == null)
+                {
+                    error = "VehiclePathFollower.StopDead not supported";
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = "Cannot inspect VF movement API: " + ex.GetType().Name;
+                return false;
+            }
+        }
+
+        private static MethodInfo FindStartPath(Type type)
+        {
+            foreach (MethodInfo method in type.GetMethods(InstanceMembers))
+            {
+                if (method.Name != "StartPath") continue;
+                ParameterInfo[] parameters = method.GetParameters();
+                if (parameters.Length < 2 || parameters.Length > 4) continue;
+                if (parameters[0].ParameterType != typeof(IntVec3)
+                    && parameters[0].ParameterType != typeof(LocalTargetInfo)) continue;
+                if (parameters[1].ParameterType != typeof(Verse.AI.PathEndMode)) continue;
+                bool optional = true;
+                for (int i = 2; i < parameters.Length; i++)
+                    if (!parameters[i].IsOptional) optional = false;
+                if (optional) return method;
+            }
+            return null;
+        }
+
+        private static MethodInfo FindStop(Type type)
+        {
+            MethodInfo method = type.GetMethod("StopDead", InstanceMembers,
+                null, Type.EmptyTypes, null);
+            return method ?? type.GetMethod("Stop", InstanceMembers,
+                null, Type.EmptyTypes, null);
+        }
+
+        public static bool TryStartPath(Thing vehicle, IntVec3 destination, out string error)
+        {
+            if (!SupportsDriving(vehicle, out error)) return false;
+            try
+            {
+                object pather = ReadMember(vehicle, "vehiclePather", "VehiclePather");
+                MethodInfo method = FindStartPath(pather.GetType());
+                ParameterInfo[] pars = method.GetParameters();
+                object[] args = new object[pars.Length];
+                args[0] = pars[0].ParameterType == typeof(IntVec3)
+                    ? (object)destination : new LocalTargetInfo(destination);
+                args[1] = Verse.AI.PathEndMode.OnCell;
+                for (int i = 2; i < args.Length; i++)
+                    args[i] = pars[i].DefaultValue;
+                object outcome = method.Invoke(pather, args);
+                if (outcome is bool && !(bool)outcome)
+                {
+                    error = "VehiclePathFollower rejected the path";
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = "VF path request failed: " + (ex.InnerException ?? ex).Message;
+                return false;
+            }
+        }
+
+        public static bool TryStop(Thing vehicle, out string error)
+        {
+            error = null;
+            if (!IsVehicle(vehicle) || vehicle.Destroyed || !vehicle.Spawned) return true;
+            if (!SupportsDriving(vehicle, out error)) return false;
+            try
+            {
+                object pather = ReadMember(vehicle, "vehiclePather", "VehiclePather");
+                FindStop(pather.GetType()).Invoke(pather, null);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = "VF stop failed: " + (ex.InnerException ?? ex).Message;
+                return false;
+            }
+        }
+
+        public static bool TryIsMoving(Thing vehicle, out bool moving)
+        {
+            moving = false;
+            if (!IsVehicle(vehicle)) return false;
+            try
+            {
+                object pather = ReadMember(vehicle, "vehiclePather", "VehiclePather");
+                object value = ReadMember(pather, "Moving", "moving", "MovingNow", "movingNow");
+                if (!(value is bool)) return false;
+                moving = (bool)value;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[Public Transit] VF moving state read failed: " + ex.GetType().Name);
+                return false;
+            }
+        }
+
+        public static bool CanMoveNow(Thing vehicle)
+        {
+            try
+            {
+                object value = ReadMember(vehicle, "CanMoveFinal", "CanMove");
+                // If a VF build lacks this property, do not pretend it can move.
+                return value is bool && (bool)value;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[Public Transit] VF CanMoveFinal read failed: " + ex.GetType().Name);
+                return false;
+            }
+        }
+
     }
 }

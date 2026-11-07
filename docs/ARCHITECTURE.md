@@ -38,8 +38,21 @@ Smash Phil discussed `LordJob_TravelWithVehicle` on 15 October 2026 as an experi
 
 ## Not implemented
 
-Schedules, passengers, commuting decisions, vehicle movement, passenger eligibility, dispatch, drawing a route map overlay, cross-map network, or synchronization with group travel systems.
+Schedules, passengers, commuting decisions, passenger eligibility, vehicle-aware docking planner, automatic driver jobs, drawing a route map overlay, cross-map network, or synchronization with group travel systems.
 
 ## Testing
 
 See [docs/TEST_PLAN.ru.md](TEST_PLAN.ru.md).
+
+
+## Experimental 0.4.0: vehicle movement (road vehicles only)
+
+- `Routes/TransitRoute`: saves opt-in service switch, target index, state, dwell tick and destination. Old save keys remain unchanged.
+- `Core/TransitVehicleController`: one map-local controller; state machine issues a new VF travel order only on state transition (every 30 ticks, not each tick). It does not assign any pawn Jobs.
+- `Core/VehicleAdapter`: VF-only reflection functions for role occupancy, path-follower StartPath / StopDead, Moving, and CanMoveFinal. If an essential VF API is missing, service start fails. Never fake a driver or teleport a vehicle.
+- `Core/TransitMapComponent`: is the only class allowed to enable/stop service. Route modification or invalid vehicle calls Stop first. Damage auto-unassignment still runs every 250 ticks.
+- `UI/Dialog_TransitNetwork`: Start/Stop per route and status messages. Driver must board manually via standard VF controls.
+- Trains of the Rim leaders may be assigned, but cannot be started in 0.4.0 (rail coupling/rotation not handled).
+- Docking currently uses a simple adjacent-cell heuristic. Full vehicle footprint/road routing and stop platform placement are future improvements.
+
+Safety rules: no driver = no movement; driver loss = stop command; inability to halt = no start; invalid stop or missing vehicle = stop; stalled path = block until manually restarted. If VF internals differ on a user's setup, treat this as experimental and report the exception/log, not as production-ready transit.
