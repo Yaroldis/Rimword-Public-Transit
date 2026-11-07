@@ -34,8 +34,13 @@ jobs:
         run: dotnet build Source/PublicTransit/PublicTransit.csproj -c Release --no-restore
       - name: Package mod for installation
         run: python tools/package_mod.py --version ci
+      - name: Expand mod package for CI artifact
+        shell: pwsh
+        run: Expand-Archive -Path dist/PublicTransit-ci.zip -DestinationPath dist/install -Force
       - uses: actions/upload-artifact@v4
         with:
           name: PublicTransit-1.6-ci
-          path: dist/PublicTransit-ci.zip
+          # GitHub archives artifacts automatically. Publish the expanded mod
+          # instead of a ZIP inside a ZIP. The root is PublicTransit/.
+          path: dist/install/
           if-no-files-found: error

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <PT_DefaultStopName>Остановка</PT_DefaultStopName>
+  <PT_StopInspectName>Название: {0}</PT_StopInspectName>
+  <PT_CreateRoute>Создать линию</PT_CreateRoute>
+  <PT_CreateRouteDesc>Создать новую транспортную линию, начиная с этой остановки.</PT_CreateRouteDesc>
+  <PT_RenameStop>Назвать остановку</PT_RenameStop>
+  <PT_RenameStopDesc>Задать остановке своё название.</PT_RenameStopDesc>
+  <PT_OpenNetwork>Транспортная сеть</PT_OpenNetwork>
+  <PT_OpenNetworkDesc>Открыть список линий и изменить порядок остановок.</PT_OpenNetworkDesc>
+  <PT_DefaultRouteName>Линия {0}</PT_DefaultRouteName>
+  <PT_NetworkSummary>Транспортная сеть — линий: {0}, остановок: {1}</PT_NetworkSummary>
+  <PT_NetworkHint>Линии пока не двигают транспорт. Порядок остановок задаётся вручную.</PT_NetworkHint>
+  <PT_NoMap>Нет доступной карты.</PT_NoMap>
+  <PT_EmptyNetwork>Нет линий. Выберите остановку и создайте первую линию.</PT_EmptyNetwork>
+  <PT_NoStops>Сначала постройте хотя бы одну остановку.</PT_NoStops>
+  <PT_NoAvailableStops>Больше нет остановок, которые можно добавить к этой линии.</PT_NoAvailableStops>
+  <PT_RenameRoute>Переименовать линию</PT_RenameRoute>
+  <PT_RouteNoStops>Нет остановок — добавьте хотя бы одну.</PT_RouteNoStops>
+  <PT_DeleteRouteQuestion>Удалить линию «{0}»? Остановки останутся на карте.</PT_DeleteRouteQuestion>
+  <PT_Rename>Название</PT_Rename>
+  <PT_AddStop>Добавить</PT_AddStop>
+  <PT_Delete>Удалить</PT_Delete>
+  <PT_Remove>Убрать</PT_Remove>
+  <PT_Cancel>Отмена</PT_Cancel>
+  <PT_Save>Сохранить</PT_Save>
+</LanguageData>

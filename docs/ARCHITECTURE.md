@@ -2,38 +2,36 @@
 
 ## Goal
 
-A fixed-route public transit system. Colonists independently decide whether to walk or ride, wait at stops, board, transfer, leave the vehicle at their stop, and continue their existing RimWorld job.
+Fixed-route public transit. Colonists eventually decide whether to walk or ride, wait at stops, board, transfer, leave at the right stop, and continue their original job.
 
-## Current status
+## Implemented in 0.2.0-dev
 
-This repository is **only the bootstrap**. It implements:
+- `Building_TransitStop`: map registration on spawn and deregistration before despawn, customizable persistent stop name, gizmos.
+- `TransitMapComponent`: registered stops derived from live buildings (not saved), persistent routes saved as `LookMode.Deep`. Stops inside each route are saved as `LookMode.Reference`.
+- `TransitRoute`: ordered stop list, add/remove/swap and custom name; `id` and serialization keys retained for older saves.
+- `Dialog_TransitNetwork`: line editor UI; `Dialog_TransitName`, `Dialog_TransitConfirm`: small modal windows.
+- `Languages/*/Keyed/PublicTransit.xml`: localized UI strings.
 
-- a loadable mod assembly (after compilation),
-- a placeable transit-stop marker (`PT_TransitStop`),
-- a per-map persisted route collection (`TransitMapComponent`),
-- a route object with persistent references to station buildings (`TransitRoute`).
+### Load order invariant
 
-It does **not** automate vehicle movement, create a route UI, board passengers, or modify pawn jobs.
+Do **not** prune route references in `MapComponent.FinalizeInit` before Scribe resolves cross-references. The only automatic repair of routes after loading is in `ExposeData` during `LoadSaveMode.PostLoadInit`. The stop registry may be reconstructed in `FinalizeInit` because it contains no serialized references.
 
-## Future boundaries
+### Lifecycle invariant
 
-1. **Core:** routes, stops, service schedules and route search; no dependency on concrete vehicle types.
-2. **Vehicle adapter:** calls to *verified* Vehicle Framework APIs for drivers, movement, capacity, boarding and alighting.
-3. **Passenger AI:** decides whether to walk, wait or ride, without disrupting original pawn jobs or reservations.
-4. **UI:** map overlays and a route/vehicle management window.
+`Building_TransitStop.DeSpawn` notifies `TransitMapComponent` while `Map` is still available. The unregister logic removes that stop from all route lists. It does not destroy empty lines, avoiding accidental user data loss.
+
+### Compatibility
+
+No Harmony patches are applied. The mod metadata still depends on VF and Harmony, but this stage does not access their APIs. A transport adapter will be isolated from routing and UI.
 
 ## Vehicle Framework research checkpoint
 
-Smash Phil discussed `LordJob_TravelWithVehicle` on 15 October 2026 as an experimental basis for several pawns with distinct jobs traveling toward a common destination. We have **not** yet established availability, stability or multi-stop behavior for RimWorld 1.6's stable VF build. Do not add a compile-time VF reference or patch its private fields until the precise version and API are inspected.
+Smash Phil discussed `LordJob_TravelWithVehicle` on 15 October 2026 as an experimental basis for several pawns with distinct jobs traveling toward a common destination. Its stability and applicability to multi-stop fixed routes in stable VF for RimWorld 1.6 remain to be tested. Keep it out of this stage.
 
-## Invariants to protect
+## Not implemented
 
-- Stop references must not be deep-serialized: they are world Things, saved by reference.
-- Routes are map-scoped: never reuse a route object across unrelated maps.
-- The vehicle's movement and the passenger's job are different state machines.
-- Cancelled jobs, destroyed vehicles, absent stops and changed priorities must not trap pawns in permanent waiting.
-- No expensive global path searches on every game tick.
+Schedules, passengers, commuting decisions, vehicles, dispatch, drawing a route map overlay, cross-map network, or synchronization with group travel systems.
 
-## Next milestone
+## Testing
 
-Compile locally and in CI, enable dependencies, start a development colony, place two stops, save and reload without errors. After that, implement route creation UI and inspect VF API.
+See [docs/TEST_PLAN.ru.md](TEST_PLAN.ru.md).

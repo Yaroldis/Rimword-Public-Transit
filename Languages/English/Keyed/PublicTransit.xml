@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <PT_DefaultStopName>Stop</PT_DefaultStopName>
+  <PT_StopInspectName>Name: {0}</PT_StopInspectName>
+  <PT_CreateRoute>Create line</PT_CreateRoute>
+  <PT_CreateRouteDesc>Create a transit line beginning at this stop.</PT_CreateRouteDesc>
+  <PT_RenameStop>Name stop</PT_RenameStop>
+  <PT_RenameStopDesc>Give this stop a custom name.</PT_RenameStopDesc>
+  <PT_OpenNetwork>Transit network</PT_OpenNetwork>
+  <PT_OpenNetworkDesc>Open the line editor and arrange stops.</PT_OpenNetworkDesc>
+  <PT_DefaultRouteName>Line {0}</PT_DefaultRouteName>
+  <PT_NetworkSummary>Transit network — {0} lines, {1} stops</PT_NetworkSummary>
+  <PT_NetworkHint>Lines do not move vehicles yet. Arrange the stops in order.</PT_NetworkHint>
+  <PT_NoMap>No available map.</PT_NoMap>
+  <PT_EmptyNetwork>No lines yet. Select a stop and create the first line.</PT_EmptyNetwork>
+  <PT_NoStops>Build at least one stop first.</PT_NoStops>
+  <PT_NoAvailableStops>No more stops are available to add to this line.</PT_NoAvailableStops>
+  <PT_RenameRoute>Rename line</PT_RenameRoute>
+  <PT_RouteNoStops>No stops; add at least one stop.</PT_RouteNoStops>
+  <PT_DeleteRouteQuestion>Delete line "{0}"? The stops will remain on the map.</PT_DeleteRouteQuestion>
+  <PT_Rename>Rename</PT_Rename>
+  <PT_AddStop>Add stop</PT_AddStop>
+  <PT_Delete>Delete</PT_Delete>
+  <PT_Remove>Remove</PT_Remove>
+  <PT_Cancel>Cancel</PT_Cancel>
+  <PT_Save>Save</PT_Save>
+</LanguageData>

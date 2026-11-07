@@ -2,6 +2,7 @@
 """Static checks without RimWorld, Unity or the .NET SDK."""
 from pathlib import Path
 import sys
+import re
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,7 +41,25 @@ def main():
     require(project.findtext("PropertyGroup/TargetFramework") == "net472", "Wrong target framework")
     references = {n.attrib.get("Include"): n.attrib.get("Version") for n in project.findall("ItemGroup/PackageReference")}
     require(references.get("Krafs.Rimworld.Ref") == "1.6.4871", "Wrong reference package")
-    print(f"OK: {len(xml_files)} XML files, About.xml, RimWorld 1.6, VF/Harmony, texture, C# config")
+    # Verify every keyed translation used in C# exists in both languages.
+    keyed = {}
+    for language in ("Russian", "English"):
+        root = ET.parse(ROOT / "Languages" / language / "Keyed" / "PublicTransit.xml").getroot()
+        keys = [node.tag for node in root]
+        require(len(keys) == len(set(keys)), f"{language}: duplicate translation key")
+        keyed[language] = {node.tag: node.text or "" for node in root}
+    require(set(keyed["Russian"]) == set(keyed["English"]), "English/Russian translation keys differ")
+    used_keys = set()
+    for source in (ROOT / "Source" / "PublicTransit").rglob("*.cs"):
+        used_keys.update(re.findall(r'"(PT_[a-zA-Z0-9]+)"\.Translate\(', source.read_text(encoding="utf-8")))
+    missing = used_keys - set(keyed["Russian"])
+    require(not missing, f"C# references missing translation keys: {sorted(missing)}")
+    for key in used_keys:
+        ru_args = set(re.findall(r"\{[0-9]+\}", keyed["Russian"][key]))
+        en_args = set(re.findall(r"\{[0-9]+\}", keyed["English"][key]))
+        require(ru_args == en_args, f"{key}: placeholder mismatch between translations")
+
+    print(f"OK: {len(xml_files)} XML files, {len(used_keys)} localized strings, RimWorld 1.6, VF/Harmony, texture, C# config")
 
 
 if __name__ == "__main__":
