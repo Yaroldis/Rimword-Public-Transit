@@ -334,7 +334,7 @@ namespace PublicTransit.Core
             {
                 // Follow the same job pipeline as a player-ordered Goto.
                 // Never call the VF pather directly from Public Transit.
-                Verse.AI.Job job = Verse.AI.JobMaker.MakeJob(
+                Verse.AI.Job job = Verse.JobMaker.MakeJob(
                     JobDefOf.Goto, new LocalTargetInfo(destination));
                 job.playerForced = true;
                 pawn.jobs.TryTakeOrderedJob(job);
