@@ -4,7 +4,7 @@ using PublicTransit.Core;
 using PublicTransit.UI;
 using UnityEngine;
 using Verse;
-
+using RimWorld;
 namespace PublicTransit.Buildings
 {
     /// <summary>
@@ -55,7 +55,7 @@ namespace PublicTransit.Buildings
             // A live route must not keep driving towards an old parking cell.
             currentMap.GetComponent<TransitMapComponent>()?.StopRoutesUsingStop(this);
             Rotation = Rotation.Rotated(RotationDirection.Clockwise);
-            currentMap.mapDrawer.MapMeshDirty(Position, MapMeshFlagDefOf.Things);
+            currentMap.mapDrawer.MapMeshDirty(Position, MapMeshFlagDefOf.Buildings);
         }
 
         public override void DrawExtraSelectionOverlays()
