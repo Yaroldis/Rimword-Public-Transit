@@ -16,6 +16,7 @@ namespace PublicTransit.Core
         private const int StopWaitTicks = 240;
         private const int TravelTimeoutTicks = 1800;
         private const int PathStartGraceTicks = 150;
+        private const int LostGotoGraceTicks = 150;
         private const int PathInactiveRetryTicks = 360;
         private const int MaxDockingRetries = 2;
         private readonly Map map;
@@ -31,6 +32,8 @@ namespace PublicTransit.Core
             public int commandTick;
             public int inactiveSinceTick = -1;
             public int retries;
+            public bool observedGoto;
+            public int missingGotoSinceTick = -1;
             public readonly HashSet<IntVec3> triedDockingCells = new HashSet<IntVec3>();
         }
 
@@ -139,6 +142,7 @@ namespace PublicTransit.Core
             if (!driverReady)
             {
                 if (route.RunState == TransitRunState.Moving ||
+                    route.RunState == TransitRunState.PendingGoto ||
                     route.RunState == TransitRunState.Recovering)
                 {
                     if (!VehicleAdapter.TryStop(vehicle, out string error))
@@ -181,6 +185,7 @@ namespace PublicTransit.Core
             if (!VehicleAdapter.TryEnsureIgnition(vehicle, out string ignitionReason))
             {
                 if (route.RunState == TransitRunState.Moving ||
+                    route.RunState == TransitRunState.PendingGoto ||
                     route.RunState == TransitRunState.Recovering)
                     VehicleAdapter.TryStop(vehicle, out string unused);
                 route.SetRunState(TransitRunState.WaitingForEngine);
@@ -211,10 +216,22 @@ namespace PublicTransit.Core
                     watches[route] = watch;
                     return;
                 }
-                route.SetRunState(TransitRunState.WaitingForDriver);
+                // A saved Goto may still be queued or awaiting VF pathing.
+                // Reconnect to it rather than issuing a competing order.
+                if (route.DestinationCell.IsValid
+                    && VehicleAdapter.TryInspectGoto(vehicle, route.DestinationCell,
+                        out bool pendingGoto, out string unusedJobState) && pendingGoto)
+                {
+                    route.SetRunState(TransitRunState.PendingGoto);
+                    watches[route] = new TravelWatch {
+                        lastCell = vehicle.Position, lastProgressTick = tick, commandTick = tick };
+                }
+                else
+                    route.SetRunState(TransitRunState.WaitingForDriver);
             }
 
-            if (route.RunState == TransitRunState.Moving)
+            if (route.RunState == TransitRunState.Moving ||
+                route.RunState == TransitRunState.PendingGoto)
             {
                 CheckProgress(route, vehicle, tick);
                 return;
@@ -269,7 +286,8 @@ namespace PublicTransit.Core
             watch.commandTick = tick;
             watch.inactiveSinceTick = -1;
             route.SetDestinationCell(destination);
-            route.SetRunState(TransitRunState.Moving);
+            // Ordered Goto accepted does not prove that VF started driving.
+            route.SetRunState(TransitRunState.PendingGoto);
             watches[route] = watch;
             return true;
         }
@@ -312,16 +330,63 @@ namespace PublicTransit.Core
                 watches[route] = watch;
             }
 
-            // Track real movement independently from the VF Moving flag.
-            // Moving == false does not establish that a road is blocked:
-            // the VF pathfinder can be calculating, interrupted, or temporarily
-            // between path segments. Do not immediately issue another order.
-            if (watch.lastCell != vehicle.Position)
+            // Check the actual RimWorld job as well as VehiclePathFollower.
+            // VF may abandon a Goto and switch to IdleVehicle/Wait while the
+            // vehicle is still fully capable of moving (canMove=True).
+            if (!VehicleAdapter.TryInspectGoto(vehicle, route.DestinationCell,
+                out bool expectedGoto, out string jobDetails))
+            {
+                TryRecoverLeg(route, vehicle, stop, tick, watch,
+                    "unable to inspect VF Goto job: " + jobDetails);
+                return;
+            }
+
+            bool changedCell = watch.lastCell != vehicle.Position;
+            if (changedCell)
             {
                 watch.lastCell = vehicle.Position;
                 watch.lastProgressTick = tick;
             }
 
+            // A leg is really under way only once Goto targets our cell AND
+            // VF reports movement (or we have observed a changed root cell).
+            if (expectedGoto && (moving || changedCell))
+            {
+                watch.observedGoto = true;
+                if (route.RunState == TransitRunState.PendingGoto)
+                    route.SetRunState(TransitRunState.Moving);
+            }
+
+            if (!expectedGoto)
+            {
+                if (watch.missingGotoSinceTick < 0)
+                    watch.missingGotoSinceTick = tick;
+                int missingTicks = tick - watch.missingGotoSinceTick;
+                if (tick - watch.commandTick >= PathStartGraceTicks
+                    && missingTicks >= LostGotoGraceTicks)
+                {
+                    TryRecoverLeg(route, vehicle, stop, tick, watch,
+                        (watch.observedGoto ? "Goto was replaced during travel" : "Goto never became active")
+                        + "; current " + jobDetails + "; missing=" + missingTicks + " ticks");
+                }
+                return;
+            }
+            watch.missingGotoSinceTick = -1;
+
+            if (route.RunState == TransitRunState.PendingGoto)
+            {
+                // A queued/starting Goto gets a bounded window to start moving.
+                // This is not a road-block diagnosis.
+                if (tick - watch.commandTick >= PathInactiveRetryTicks)
+                    TryRecoverLeg(route, vehicle, stop, tick, watch,
+                        "Goto accepted but never started moving; current " + jobDetails);
+                return;
+            }
+
+            // Track real movement independently from the VF Moving flag.
+            // Moving == false does not establish that a road is blocked:
+            // the VF pathfinder can be calculating, interrupted, or temporarily
+            // between path segments. Do not immediately issue another order.
             if (!moving)
             {
                 if (watch.inactiveSinceTick < 0)

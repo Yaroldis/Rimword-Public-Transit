@@ -62,6 +62,7 @@
   <PT_DriveStopped>машина назначена; линия остановлена</PT_DriveStopped>
   <PT_DriveBlockedMessage>Линия «{0}» остановлена: проверьте дорогу, водительское место и транспорт.</PT_DriveBlockedMessage>
   <PT_DriveMissingStop>На линии есть отсутствующая или разрушенная остановка.</PT_DriveMissingStop>
+  <PT_DrivePendingGoto>ожидает подтверждения движения VF</PT_DrivePendingGoto>
   <PT_DriveWaitingEngine>Ожидание запуска двигателя или восстановления готовности транспорта</PT_DriveWaitingEngine>
   <PT_NoDriverAssigned>не назначен</PT_NoDriverAssigned>
   <PT_DriverOnRoute>Водитель: {0}</PT_DriverOnRoute>

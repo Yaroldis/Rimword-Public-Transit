@@ -148,7 +148,8 @@ namespace PublicTransit.Routes
                     || driverBreakStopIndex >= stops.Count)) EndDriverBreak();
                 // Never restart an old movement command while Scribe is resolving the map.
                 // The map controller will resume or reissue it after the first tick.
-                if (serviceEnabled && runState == TransitRunState.Moving)
+                if (serviceEnabled && (runState == TransitRunState.Moving
+                    || runState == TransitRunState.PendingGoto))
                     runState = TransitRunState.Recovering;
             }
         }

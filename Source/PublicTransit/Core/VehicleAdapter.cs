@@ -512,7 +512,20 @@ namespace PublicTransit.Core
                 Verse.AI.Job job = Verse.JobMaker.MakeJob(
                     JobDefOf.Goto, new LocalTargetInfo(destination));
                 job.playerForced = true;
-                pawn.jobs.TryTakeOrderedJob(job);
+                if (pawn.jobs == null)
+                {
+                    error = "VF vehicle has no job tracker";
+                    return false;
+                }
+                // A successful request may still be QUEUED by RimWorld. The
+                // route controller separately waits for the Goto to become
+                // active and for actual movement to begin.
+                if (!pawn.jobs.TryTakeOrderedJob(job))
+                {
+                    error = "VF rejected the Goto order to " + destination
+                        + "; current job=" + DescribeCurrentJob(pawn);
+                    return false;
+                }
                 return true;
             }
             catch (Exception ex)
@@ -520,6 +533,37 @@ namespace PublicTransit.Core
                 error = "VF Goto job request failed: " + (ex.InnerException ?? ex).Message;
                 return false;
             }
+        }
+
+        /// <summary>
+        /// The ordered-job API returning true does not mean the requested
+        /// Goto has started. Keep the job check separate from the VF pather's
+        /// Moving flag to distinguish a queued, rejected or interrupted job.
+        /// </summary>
+        public static bool TryInspectGoto(Thing vehicle, IntVec3 destination,
+            out bool isExpectedGoto, out string details)
+        {
+            isExpectedGoto = false;
+            var pawn = vehicle as Pawn;
+            if (pawn == null || pawn.jobs == null)
+            {
+                details = "VF pawn job tracker unavailable";
+                return false;
+            }
+            var current = pawn.CurJob;
+            isExpectedGoto = current != null && current.def == JobDefOf.Goto
+                && current.targetA.Cell == destination;
+            details = DescribeCurrentJob(pawn);
+            return true;
+        }
+
+        private static string DescribeCurrentJob(Pawn pawn)
+        {
+            if (pawn == null || pawn.CurJob == null) return "none";
+            var job = pawn.CurJob;
+            return (job.def == null ? "unknown" : job.def.defName)
+                + ", targetA=" + job.targetA.Cell
+                + ", playerForced=" + job.playerForced;
         }
 
         public static bool TryStop(Thing vehicle, out string error)

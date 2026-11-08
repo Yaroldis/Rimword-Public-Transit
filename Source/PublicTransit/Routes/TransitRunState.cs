@@ -10,6 +10,8 @@ namespace PublicTransit.Routes
         Blocked,
         Recovering,
         WaitingForEngine,
-        DriverBreak
+        DriverBreak,
+        // Append to preserve numeric values of states in existing saves.
+        PendingGoto
     }
 }

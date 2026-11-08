@@ -414,6 +414,7 @@ namespace PublicTransit.Core
                 case TransitRunState.WaitingForDriver: return "PT_DriveWaitingDriver".Translate();
                 case TransitRunState.DriverBreak: return "PT_DriverOnBreakStatus".Translate();
                 case TransitRunState.WaitingForEngine: return "PT_DriveWaitingEngine".Translate();
+                case TransitRunState.PendingGoto: return "PT_DrivePendingGoto".Translate();
                 case TransitRunState.Moving:
                     string stopName = route.NextStopIndex >= 0 && route.NextStopIndex < route.Stops.Count
                         ? route.Stops[route.NextStopIndex]?.StopName ?? "?" : "?";

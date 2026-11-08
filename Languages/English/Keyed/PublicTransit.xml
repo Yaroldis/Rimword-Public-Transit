@@ -62,6 +62,7 @@
   <PT_DriveStopped>vehicle assigned; line stopped</PT_DriveStopped>
   <PT_DriveBlockedMessage>Line "{0}" stopped: check the road, driver seat, and vehicle.</PT_DriveBlockedMessage>
   <PT_DriveMissingStop>A stop on this line is missing or destroyed.</PT_DriveMissingStop>
+  <PT_DrivePendingGoto>waiting for VF to start the Goto job</PT_DrivePendingGoto>
   <PT_DriveWaitingEngine>Waiting for ignition or vehicle readiness</PT_DriveWaitingEngine>
   <PT_NoDriverAssigned>not assigned</PT_NoDriverAssigned>
   <PT_DriverOnRoute>Driver: {0}</PT_DriverOnRoute>
