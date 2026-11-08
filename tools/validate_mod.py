@@ -33,9 +33,17 @@ def main():
     stop = next((n for n in defs.findall("ThingDef") if n.findtext("defName") == "PT_TransitStop"), None)
     require(stop is not None, "PT_TransitStop ThingDef not found")
     require(stop.findtext("thingClass") == "PublicTransit.Buildings.Building_TransitStop", "Invalid stop class name")
-    texture = ROOT / "Textures" / (stop.findtext("graphicData/texPath") + ".png")
-    require(texture.exists(), f"Stop texture is missing: {texture}")
-    require(texture.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"), "Stop texture is not PNG")
+    require(stop.findtext("rotatable") == "true", "Transit stop must be rotatable")
+    require(stop.findtext("defaultPlacingRot") == "South", "Default docking side must be South")
+    base_texture = ROOT / "Textures" / (stop.findtext("graphicData/texPath") + ".png")
+    require(base_texture.exists(), f"Stop UI texture missing: {base_texture}")
+    require(base_texture.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"), "Stop UI texture is not PNG")
+    require(stop.findtext("graphicData/graphicClass") == "Graphic_Multi", "Transit stop must have direction graphics")
+    for direction in ("north", "east", "south", "west"):
+        texture = ROOT / "Textures" / (stop.findtext("graphicData/texPath") + "_" + direction + ".png")
+        require(texture.exists(), f"Rotated stop texture missing: {texture}")
+        require(texture.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"),
+                f"Rotated stop texture is not PNG: {texture}")
 
     project = ET.parse(ROOT / "Source" / "PublicTransit" / "PublicTransit.csproj").getroot()
     require(project.findtext("PropertyGroup/TargetFramework") == "net472", "Wrong target framework")

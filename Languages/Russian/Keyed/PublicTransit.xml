@@ -76,4 +76,12 @@
   <PT_ExperimentalDriverBoardingSetting>Включить экспериментальную автоматическую посадку назначенных водителей</PT_ExperimentalDriverBoardingSetting>
   <PT_ExperimentalDriverBoardingDescription>По умолчанию выключено. Совместимость с API VF ещё тестируется. Используйте копию сохранения; ручная посадка остаётся доступной.</PT_ExperimentalDriverBoardingDescription>
   <PT_DriverJobDisabledHint>Автопосадка выключена в настройках Public Transit. Посади выбранного водителя вручную.</PT_DriverJobDisabledHint>
+
+  <PT_RotateDockingSide>Повернуть сторону подъезда</PT_RotateDockingSide>
+  <PT_RotateDockingSideDesc>Повернуть остановку на 90° по часовой стрелке. Маршруты, проходящие через эту остановку, будут остановлены.</PT_RotateDockingSideDesc>
+  <PT_DockingSide>Подъезд: {0}; клетка ({1}, {2}). Выделите остановку, чтобы увидеть точку.</PT_DockingSide>
+  <PT_DockingNorth>север</PT_DockingNorth>
+  <PT_DockingEast>восток</PT_DockingEast>
+  <PT_DockingSouth>юг</PT_DockingSouth>
+  <PT_DockingWest>запад</PT_DockingWest>
 </LanguageData>

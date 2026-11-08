@@ -14,10 +14,56 @@ namespace PublicTransit.Buildings
     public sealed class Building_TransitStop : Building
     {
         private string customName;
+        // This flag migrates pre-0.5 saves, whose 1x1 signs had no rotation.
+        private bool dockingDirectionInitialized = true;
 
         public string StopName => string.IsNullOrWhiteSpace(customName)
             ? "PT_DefaultStopName".Translate() + " (" + Position.x + ", " + Position.z + ")"
             : customName;
+
+        /// <summary>
+        /// Exactly one tile adjacent to the building is the boarding/docking
+        /// marker. Rotation is RimWorld's native Rot4 and is saved by Thing.
+        /// New stops are placed facing south in the ThingDef.
+        /// </summary>
+        public IntVec3 DockingSideCell
+        {
+            get
+            {
+                if (Rotation == Rot4.North) return Position + new IntVec3(0, 0, 1);
+                if (Rotation == Rot4.East) return Position + new IntVec3(1, 0, 0);
+                if (Rotation == Rot4.West) return Position + new IntVec3(-1, 0, 0);
+                return Position + new IntVec3(0, 0, -1); // South
+            }
+        }
+
+        private string DockingDirectionName
+        {
+            get
+            {
+                if (Rotation == Rot4.North) return "PT_DockingNorth".Translate().ToString();
+                if (Rotation == Rot4.East) return "PT_DockingEast".Translate().ToString();
+                if (Rotation == Rot4.West) return "PT_DockingWest".Translate().ToString();
+                return "PT_DockingSouth".Translate().ToString();
+            }
+        }
+
+        private void RotateDockingSide()
+        {
+            if (!Spawned || Map == null) return;
+            Map currentMap = Map;
+            // A live route must not keep driving towards an old parking cell.
+            currentMap.GetComponent<TransitMapComponent>()?.StopRoutesUsingStop(this);
+            Rotation = Rotation.Rotated(RotationDirection.Clockwise);
+            currentMap.mapDrawer.MapMeshDirty(Position, MapMeshFlag.Things);
+        }
+
+        public override void DrawExtraSelectionOverlays()
+        {
+            base.DrawExtraSelectionOverlays();
+            if (Spawned && DockingSideCell.InBounds(Map))
+                GenDraw.DrawFieldEdges(new List<IntVec3> { DockingSideCell }, Color.cyan);
+        }
 
         public void Rename(string newName)
         {
@@ -29,6 +75,13 @@ namespace PublicTransit.Buildings
         {
             base.ExposeData();
             Scribe_Values.Look(ref customName, "PT_customName");
+            Scribe_Values.Look(ref dockingDirectionInitialized,
+                "PT_dockingDirectionInitialized", false);
+            if (Scribe.mode == LoadSaveMode.PostLoadInit && !dockingDirectionInitialized)
+            {
+                Rotation = Rot4.South;
+                dockingDirectionInitialized = true;
+            }
         }
 
         public override void SpawnSetup(Map map, bool respawningAfterLoad)
@@ -49,7 +102,10 @@ namespace PublicTransit.Buildings
         {
             string baseText = base.GetInspectString();
             string stopText = "PT_StopInspectName".Translate(StopName);
-            return string.IsNullOrEmpty(baseText) ? stopText : baseText + "\n" + stopText;
+            string dockingText = "PT_DockingSide".Translate(DockingDirectionName,
+                DockingSideCell.x, DockingSideCell.z);
+            string combined = stopText + "\n" + dockingText;
+            return string.IsNullOrEmpty(baseText) ? combined : baseText + "\n" + combined;
         }
 
         public override IEnumerable<Gizmo> GetGizmos()
@@ -62,6 +118,14 @@ namespace PublicTransit.Buildings
 
             // Temporary icon; the final transit UI will have dedicated sprites.
             Texture2D icon = ContentFinder<Texture2D>.Get("Things/Building/TransitStop");
+            yield return new Command_Action
+            {
+                defaultLabel = "PT_RotateDockingSide".Translate(),
+                defaultDesc = "PT_RotateDockingSideDesc".Translate(),
+                icon = icon,
+                action = RotateDockingSide
+            };
+
             yield return new Command_Action
             {
                 defaultLabel = "PT_CreateRoute".Translate(),

@@ -7,11 +7,13 @@
     <thingClass>PublicTransit.Buildings.Building_TransitStop</thingClass>
     <graphicData>
       <texPath>Things/Building/TransitStop</texPath>
-      <graphicClass>Graphic_Single</graphicClass>
+      <graphicClass>Graphic_Multi</graphicClass>
       <drawSize>(1,1)</drawSize>
     </graphicData>
     <altitudeLayer>FloorEmplacement</altitudeLayer>
     <size>(1,1)</size>
+    <rotatable>true</rotatable>
+    <defaultPlacingRot>South</defaultPlacingRot>
     <passability>Standable</passability>
     <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
     <useHitPoints>false</useHitPoints>

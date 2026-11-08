@@ -1,5 +1,9 @@
 ## 0.5.0-dev — Assigned-driver prototype (2026-11-08)
 
+- Added a fixed docking-side marker to every stop. Newly placed and legacy non-rotatable stops default to South; the marker moves with native four-direction stop rotation.
+- Stops can be rotated at construction time or clockwise after building. Rotating an active stop safely halts any line that uses it, without losing route or vehicle assignments.
+- Road-vehicle docking now searches **only the marked side** and requires the full vehicle footprint to contain the marker cell. No fallback to another side when it is blocked.
+- Added four placeholder directional stop PNGs and a cyan one-cell selection overlay. Replacement art can use `TransitStop_{north,east,south,west}.png`.
 - Player can assign a specific colonist to a line. The same pawn cannot be assigned to a second line.
 - `TransitRoute` stores the driver as a persistent RimWorld reference; existing saves without it retain manual VF boarding.
 - Route controller requires the explicitly assigned pawn in the driver seat before movement.

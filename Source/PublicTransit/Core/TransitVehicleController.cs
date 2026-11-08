@@ -184,14 +184,14 @@ namespace PublicTransit.Core
             if (route.NextStopIndex < 0 || route.NextStopIndex >= route.Stops.Count)
                 route.SetNextStopIndex(0);
             Building_TransitStop stop = route.Stops[route.NextStopIndex];
-            if (IsBesideStop(vehicle, stop))
+            if (IsDockedAtStop(vehicle, stop))
             {
                 Arrive(route, tick);
                 return;
             }
             if (!TryGetDockingCell(stop, vehicle, null, out IntVec3 destination))
             {
-                Block(route, "no full-size parking space next to '" + stop.StopName + "'");
+                Block(route, "no full-size parking space on the marked side of '" + stop.StopName + "'");
                 return;
             }
 
@@ -233,7 +233,7 @@ namespace PublicTransit.Core
                 return;
             }
             Building_TransitStop stop = route.Stops[route.NextStopIndex];
-            if (IsBesideStop(vehicle, stop))
+            if (IsDockedAtStop(vehicle, stop))
             {
                 // The footprint being beside the stop is authoritative for
                 // docking. VF can briefly be updating its internal path state.
@@ -309,7 +309,7 @@ namespace PublicTransit.Core
                 if (!TryGetDockingCell(stop, vehicle, watch.triedDockingCells,
                     out destination))
                 {
-                    Block(route, "no alternative docking cell for '" + stop.StopName
+                    Block(route, "no alternative docking cell on the marked side of '" + stop.StopName
                         + "' after VF stopped at " + vehicle.Position
                         + "; VF state: " + VehicleAdapter.DescribeMovement(vehicle));
                     return;
@@ -355,35 +355,60 @@ namespace PublicTransit.Core
         }
 
         /// <summary>
-        /// A station occupies its own tile. To dock, the vehicle's entire
-        /// footprint must fit on passable cells and end next to that station.
-        /// VF is still the final authority on reachability and movement.
+        /// Docking side is fixed by the stop's rotation (South by default).
+        /// The vehicle footprint must contain the adjacent boarding marker cell,
+        /// without overlapping the stop. Do not search the other three sides:
+        /// a blocked boarding side is a genuine route-layout problem.
         /// </summary>
         private bool TryGetDockingCell(Building_TransitStop stop, Thing vehicle,
             HashSet<IntVec3> excluded, out IntVec3 destination)
         {
             destination = IntVec3.Invalid;
+            IntVec3 marker = stop.DockingSideCell;
+            if (!marker.InBounds(map) || !marker.Standable(map)) return false;
+
             int radius = Math.Max(5, Math.Max(vehicle.def.size.x, vehicle.def.size.z) + 3);
-            float best = float.MaxValue;
+            int bestAlignment = int.MaxValue;
+            // Deterministic tie-breaking: unlike the former algorithm, this
+            // does not depend on which direction the vehicle approached from.
             IntVec3 station = stop.Position;
             for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++)
             {
                 IntVec3 root = new IntVec3(station.x + dx, 0, station.z + dz);
-                if (!root.InBounds(map) || (excluded != null && excluded.Contains(root))) continue;
+                if (!root.InBounds(map) || (excluded != null && excluded.Contains(root)))
+                    continue;
                 CellRect footprint = GenAdj.OccupiedRect(root, vehicle.Rotation, vehicle.def.size);
-                if (!footprint.InBounds(map)) continue;
-                int gap = FootprintGap(footprint, station);
-                // Prefer true side-adjacency. Allow one extra cell only if
-                // no accessible adjacent placement is available.
-                if (gap < 1 || gap > 2) continue;
+                if (!footprint.InBounds(map) || !FootprintOnDockingSide(footprint, stop))
+                    continue;
                 if (!FootprintCanPark(footprint, vehicle)) continue;
-                float score = gap * 10000f
-                    + root.DistanceToSquared(vehicle.Position)
-                    + (dx * dx + dz * dz) * 0.02f;
-                if (score < best) { best = score; destination = root; }
+
+                // All eligible footprints contain the same marker cell. Prefer
+                // the one whose center line matches the marker most closely.
+                int alignment = (stop.Rotation == Rot4.South || stop.Rotation == Rot4.North)
+                    ? Math.Abs(footprint.minX + footprint.maxX - 2 * station.x)
+                    : Math.Abs(footprint.minZ + footprint.maxZ - 2 * station.z);
+                if (alignment < bestAlignment)
+                {
+                    bestAlignment = alignment;
+                    destination = root;
+                }
             }
             return destination.IsValid;
+        }
+
+        private static bool FootprintOnDockingSide(CellRect footprint, Building_TransitStop stop)
+        {
+            IntVec3 station = stop.Position;
+            IntVec3 marker = stop.DockingSideCell;
+            if (!footprint.Contains(marker)) return false;
+            if (stop.Rotation == Rot4.South)
+                return footprint.maxZ == station.z - 1;
+            if (stop.Rotation == Rot4.North)
+                return footprint.minZ == station.z + 1;
+            if (stop.Rotation == Rot4.East)
+                return footprint.minX == station.x + 1;
+            return footprint.maxX == station.x - 1; // West
         }
 
         private bool FootprintCanPark(CellRect rect, Thing vehicle)
@@ -412,9 +437,9 @@ namespace PublicTransit.Core
             return FootprintGap(vehicle.OccupiedRect(), stop.Position);
         }
 
-        private static bool IsBesideStop(Thing vehicle, Building_TransitStop stop)
+        private static bool IsDockedAtStop(Thing vehicle, Building_TransitStop stop)
         {
-            return DistanceFromBodyToStop(vehicle, stop) == 1;
+            return FootprintOnDockingSide(vehicle.OccupiedRect(), stop);
         }
 
         private bool AllStopsValid(TransitRoute route)

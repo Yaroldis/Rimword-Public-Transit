@@ -76,4 +76,12 @@
   <PT_ExperimentalDriverBoardingSetting>Enable experimental automatic boarding for assigned drivers</PT_ExperimentalDriverBoardingSetting>
   <PT_ExperimentalDriverBoardingDescription>OFF by default. Requires VF boarding API compatibility. Test on a backup save; manual VF boarding remains available.</PT_ExperimentalDriverBoardingDescription>
   <PT_DriverJobDisabledHint>Automatic boarding is OFF in Public Transit mod settings. Board your chosen driver manually.</PT_DriverJobDisabledHint>
+
+  <PT_RotateDockingSide>Rotate docking side</PT_RotateDockingSide>
+  <PT_RotateDockingSideDesc>Rotate this stop 90° clockwise. Active routes through this stop will be stopped.</PT_RotateDockingSideDesc>
+  <PT_DockingSide>Docking: {0}; marker cell ({1}, {2}). Select the stop to see the marker.</PT_DockingSide>
+  <PT_DockingNorth>north</PT_DockingNorth>
+  <PT_DockingEast>east</PT_DockingEast>
+  <PT_DockingSouth>south</PT_DockingSouth>
+  <PT_DockingWest>west</PT_DockingWest>
 </LanguageData>

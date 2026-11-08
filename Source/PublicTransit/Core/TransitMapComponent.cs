@@ -53,6 +53,18 @@ namespace PublicTransit.Core
             }
         }
 
+        /// <summary>
+        /// Stop running services before the orientation and docking marker move.
+        /// Route definitions and vehicle assignments remain intact.
+        /// </summary>
+        public void StopRoutesUsingStop(Building_TransitStop stop)
+        {
+            if (stop == null || routes == null) return;
+            foreach (TransitRoute route in routes)
+                if (route != null && route.ContainsStop(stop) && route.ServiceEnabled)
+                    Driving.Stop(route);
+        }
+
         public TransitRoute CreateRoute(string displayName, Building_TransitStop firstStop = null)
         {
             if (routes == null) routes = new List<TransitRoute>();
