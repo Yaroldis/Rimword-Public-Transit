@@ -353,6 +353,73 @@ namespace PublicTransit.Core
             }
         }
 
+        /// <summary>
+        /// End an assigned driver's shift using VF's own disembark operation.
+        /// The Pawn is not removed from a ThingOwner or manually spawned here:
+        /// doing so could corrupt crew assignments and saved games. VF versions
+        /// with an unknown required parameter signature are rejected safely.
+        /// </summary>
+        public static bool TryDisembarkDriver(Thing vehicle, Pawn driver, out string error)
+        {
+            error = null;
+            if (!IsVehicle(vehicle) || driver == null || vehicle.Destroyed
+                || !vehicle.Spawned)
+            {
+                error = "vehicle or driver unavailable";
+                return false;
+            }
+            if (!IsPawnDriving(vehicle, driver)) return true;
+
+            try
+            {
+                MethodInfo disembark = null;
+                string available = string.Empty;
+                foreach (MethodInfo method in vehicle.GetType().GetMethods(InstanceMembers))
+                {
+                    if (method.Name != "DisembarkPawn") continue;
+                    available += (available.Length == 0 ? string.Empty : "; ") + method;
+                    ParameterInfo[] parameters = method.GetParameters();
+                    if (parameters.Length < 1 || parameters[0].ParameterType != typeof(Pawn))
+                        continue;
+                    bool supported = true;
+                    for (int i = 1; i < parameters.Length; i++)
+                        if (!parameters[i].IsOptional) supported = false;
+                    if (supported && (disembark == null
+                        || parameters.Length < disembark.GetParameters().Length))
+                        disembark = method;
+                }
+                if (disembark == null)
+                {
+                    error = "VF DisembarkPawn overload unsupported; signatures="
+                        + (available.Length == 0 ? "not found" : available)
+                        + ". Use VF's manual disembark button.";
+                    return false;
+                }
+                ParameterInfo[] argsInfo = disembark.GetParameters();
+                object[] args = new object[argsInfo.Length];
+                args[0] = driver;
+                for (int i = 1; i < args.Length; i++)
+                    args[i] = Type.Missing; // use the VF method's optional default
+                object result = disembark.Invoke(vehicle, args);
+                if (result is bool && !(bool)result)
+                {
+                    error = "VF refused to disembark driver";
+                    return false;
+                }
+                if (IsPawnDriving(vehicle, driver))
+                {
+                    error = "VF disembark returned, but driver still occupies the seat";
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = "VF disembark exception: " + (ex.InnerException ?? ex).Message;
+                return false;
+            }
+        }
+
         private static bool IsDrivingRole(object role)
         {
             if (role == null) return false;

@@ -78,11 +78,31 @@ namespace PublicTransit.Core
         public void Stop(TransitRoute route)
         {
             if (route == null) return;
-            if (route.ServiceEnabled && route.AssignedVehicle != null)
+            bool wasRunning = route.ServiceEnabled;
+            Thing vehicle = route.AssignedVehicle;
+            Pawn driver = route.AssignedDriver;
+            bool stopped = true;
+            if (wasRunning && vehicle != null)
             {
-                if (!VehicleAdapter.TryStop(route.AssignedVehicle, out string err))
+                stopped = VehicleAdapter.TryStop(vehicle, out string err);
+                if (!stopped)
                     Log.Warning("[Public Transit] Unable to stop route '" + route.DisplayName + "': " + err);
             }
+            // A line stop ends the selected driver's shift, not their permanent
+            // assignment to the route. Cancel an unfinished boarding order, too.
+            if (wasRunning && driver != null && driver.Spawned && driver.jobs != null
+                && driver.CurJob != null && driver.CurJob.def != null
+                && driver.CurJob.def.defName == "PT_BoardTransitDriver")
+                driver.jobs.EndCurrentJob(Verse.AI.JobCondition.InterruptForced);
+
+            // Never remove crew directly from a VF ThingOwner: VF owns pawn
+            // spawn/despawn, seat reservations and post-disembark notifications.
+            if (wasRunning && stopped && driver != null && vehicle != null
+                && VehicleAdapter.IsPawnDriving(vehicle, driver)
+                && !VehicleAdapter.TryDisembarkDriver(vehicle, driver, out string exitError))
+                Log.Warning("[Public Transit] Unable to disembark driver on line '"
+                    + route.DisplayName + "': " + exitError);
+
             route.SetServiceEnabled(false);
             route.SetDestinationCell(IntVec3.Invalid);
             watches.Remove(route);

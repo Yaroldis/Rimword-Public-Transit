@@ -94,7 +94,12 @@ namespace PublicTransit.Core
                 error = "PT_VehicleTooDamagedToAssign".Translate().ToString();
                 return false;
             }
-            return Driving.TryEnable(route, out error);
+            if (!Driving.TryEnable(route, out error)) return false;
+            // A new service start is a new shift. A previous failed boarding
+            // attempt must not delay the selected driver's return to the bus.
+            if (route.AssignedDriver != null)
+                nextBoardAttemptTick.Remove(route.AssignedDriver);
+            return true;
         }
 
         public void StopService(TransitRoute route)
@@ -175,7 +180,10 @@ namespace PublicTransit.Core
                 error = "PT_DriverAlreadyAssigned".Translate().ToString();
             if (error != null) return false;
             Driving.Stop(route); // Driver change may not happen during travel.
+            if (route.AssignedDriver != null)
+                nextBoardAttemptTick.Remove(route.AssignedDriver);
             route.SetAssignedDriver(pawn);
+            nextBoardAttemptTick.Remove(pawn);
             return true;
         }
 
@@ -183,8 +191,10 @@ namespace PublicTransit.Core
         {
             if (route == null || routes == null || !routes.Contains(route)) return;
             Driving.Stop(route);
+            if (route.AssignedDriver != null)
+                nextBoardAttemptTick.Remove(route.AssignedDriver);
             route.SetAssignedDriver(null);
-            // Do not forcibly eject an existing crew member; let VF handle disembarking.
+            // The controller requested disembark through VF if the shift was active.
         }
 
         private bool CanBeTransitDriver(Pawn pawn)
@@ -214,12 +224,11 @@ namespace PublicTransit.Core
                 Thing vehicle = route.AssignedVehicle;
                 if (!VehicleAdapter.CanAssign(vehicle, map) || VehicleAdapter.IsTrain(vehicle)
                     || IsVehicleOverDamageThreshold(vehicle)
+                    || VehicleAdapter.IsPawnDriving(vehicle, pawn)
                     || VehicleAdapter.HasActiveDriver(vehicle)) continue;
-                // Do not overwrite an existing task, including a manually issued VF boarding task.
+
                 Job current = pawn.CurJob;
-                if (current != null && (current.def == null ||
-                    (current.def != JobDefOf.Wait
-                        && current.def.defName != "Wait_Wander"))) continue;
+                if (!CanInterruptForDriverShift(current, jobDef)) continue;
                 if (pawn.jobs == null) continue;
                 int now = Find.TickManager.TicksGame;
                 if (nextBoardAttemptTick.TryGetValue(pawn, out int due) && now < due)
@@ -228,9 +237,34 @@ namespace PublicTransit.Core
                 // exposes a different boarding API and this Job must fail closed).
                 nextBoardAttemptTick[pawn] = now + 2500;
                 Job boarding = JobMaker.MakeJob(jobDef, new LocalTargetInfo(vehicle));
+                // A player has explicitly assigned this pawn to the line, so
+                // boarding outranks normal automatic work. Explicit player
+                // orders and emergency jobs below still take precedence.
                 boarding.playerForced = true;
                 pawn.jobs.TryTakeOrderedJob(boarding);
             }
+        }
+
+        private static bool CanInterruptForDriverShift(Job current, JobDef boarding)
+        {
+            if (current == null) return true;
+            if (current.def == null || current.def == boarding || current.playerForced)
+                return false;
+            // Do not interrupt urgent health, rescue, firefighting or fleeing
+            // tasks. This is an initial conservative safeguard, not a complete
+            // work-priority system; the player can still issue direct orders.
+            string name = current.def.defName ?? string.Empty;
+            if (name.IndexOf("Tend", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Rescue", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("BeatFire", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Extinguish", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Flee", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+            // DoBill also covers ordinary cooking/crafting. Protect medical
+            // operations on pawns, but do not keep a cook off their driver shift.
+            if (name == "DoBill" && current.targetA.Thing is Pawn)
+                return false;
+            return true;
         }
 
         /// <summary>Assign a valid VF vehicle to exactly one line on this map.</summary>
