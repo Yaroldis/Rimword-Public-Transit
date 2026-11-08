@@ -517,13 +517,19 @@ namespace PublicTransit.Core
                     error = "VF vehicle has no job tracker";
                     return false;
                 }
-                // A successful request may still be QUEUED by RimWorld. The
-                // route controller separately waits for the Goto to become
-                // active and for actual movement to begin.
-                if (!pawn.jobs.TryTakeOrderedJob(job))
+                // Diagnostic 0.5.4a: distinguish a queued order from a job
+                // that starts and then disappears before our next 30-tick check.
+                string beforeJob = DescribeCurrentJob(pawn);
+                bool accepted = pawn.jobs.TryTakeOrderedJob(job);
+                string afterJob = DescribeCurrentJob(pawn);
+                Log.Message("[Public Transit][GotoDiag] requested=" + destination
+                    + ", from=" + vehicle.Position
+                    + ", accepted=" + accepted
+                    + ", before={" + beforeJob + "}, immediatelyAfter={" + afterJob + "}");
+                if (!accepted)
                 {
                     error = "VF rejected the Goto order to " + destination
-                        + "; current job=" + DescribeCurrentJob(pawn);
+                        + "; current job=" + afterJob;
                     return false;
                 }
                 return true;

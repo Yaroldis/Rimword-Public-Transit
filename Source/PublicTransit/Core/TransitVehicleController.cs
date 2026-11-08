@@ -33,6 +33,7 @@ namespace PublicTransit.Core
             public int inactiveSinceTick = -1;
             public int retries;
             public bool observedGoto;
+            public bool loggedFirstJobCheck;
             public int missingGotoSinceTick = -1;
             public readonly HashSet<IntVec3> triedDockingCells = new HashSet<IntVec3>();
         }
@@ -339,6 +340,17 @@ namespace PublicTransit.Core
                 TryRecoverLeg(route, vehicle, stop, tick, watch,
                     "unable to inspect VF Goto job: " + jobDetails);
                 return;
+            }
+
+            // Diagnostic 0.5.4a: first observation after the ordered Goto.
+            // Issuing the order can succeed even if it ends before we tick.
+            if (!watch.loggedFirstJobCheck)
+            {
+                watch.loggedFirstJobCheck = true;
+                Log.Message("[Public Transit][GotoDiag] first check after "
+                    + (tick - watch.commandTick) + " ticks; target=" + route.DestinationCell
+                    + ", expectedGoto=" + expectedGoto + ", moving=" + moving
+                    + ", pos=" + vehicle.Position + ", current={" + jobDetails + "}");
             }
 
             bool changedCell = watch.lastCell != vehicle.Position;
