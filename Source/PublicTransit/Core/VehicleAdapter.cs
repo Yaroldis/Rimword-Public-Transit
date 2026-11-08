@@ -517,19 +517,46 @@ namespace PublicTransit.Core
                     error = "VF vehicle has no job tracker";
                     return false;
                 }
-                // Diagnostic 0.5.4a: distinguish a queued order from a job
-                // that starts and then disappears before our next 30-tick check.
-                string beforeJob = DescribeCurrentJob(pawn);
-                bool accepted = pawn.jobs.TryTakeOrderedJob(job);
-                string afterJob = DescribeCurrentJob(pawn);
-                Log.Message("[Public Transit][GotoDiag] requested=" + destination
-                    + ", from=" + vehicle.Position
-                    + ", accepted=" + accepted
-                    + ", before={" + beforeJob + "}, immediatelyAfter={" + afterJob + "}");
-                if (!accepted)
+                // 0.5.4b: TryTakeOrderedJob can return true after merely QUEUEING
+                // Goto behind an uninterruptible Wait/IdleVehicle job. For an
+                // autonomous line we need to start its next leg immediately.
+                // Only replace normal non-forced idle jobs; do not hijack a
+                // player's active manual order or another vehicle job.
+                Verse.AI.Job currentJob = pawn.CurJob;
+                if (currentJob != null && currentJob.def == JobDefOf.Goto
+                    && currentJob.targetA.IsValid && currentJob.targetA.Cell == destination)
+                    return true;
+
+                bool isIdle = currentJob == null
+                    || (currentJob.def != null &&
+                        (currentJob.def == JobDefOf.Wait
+                            || currentJob.def.defName == "IdleVehicle"));
+                if (!isIdle || (currentJob != null && currentJob.playerForced))
                 {
-                    error = "VF rejected the Goto order to " + destination
-                        + "; current job=" + afterJob;
+                    error = "Cannot start transit Goto: vehicle has another active job: "
+                        + DescribeCurrentJob(pawn);
+                    return false;
+                }
+
+                string beforeJob = DescribeCurrentJob(pawn);
+                // Old Public Transit versions could leave Goto queued behind
+                // an indefinite Wait. The route owns this vehicle's job queue
+                // while service is active; clear these obsolete commands.
+                pawn.jobs.ClearQueuedJobs();
+                pawn.jobs.StartJob(job, Verse.AI.JobCondition.InterruptForced);
+                string afterJob = DescribeCurrentJob(pawn);
+                bool started = pawn.CurJob != null && pawn.CurJob.def == JobDefOf.Goto
+                    && pawn.CurJob.targetA.IsValid && pawn.CurJob.targetA.Cell == destination;
+
+                Log.Message("[Public Transit][GotoStart] requested=" + destination
+                    + ", from=" + vehicle.Position
+                    + ", rotation=" + vehicle.Rotation
+                    + ", started=" + started
+                    + ", before={" + beforeJob + "}, after={" + afterJob + "}");
+                if (!started)
+                {
+                    error = "Vehicle Goto was not active after StartJob; "
+                        + "current job=" + afterJob;
                     return false;
                 }
                 return true;
