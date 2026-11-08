@@ -663,6 +663,73 @@ namespace PublicTransit.Core
             }
         }
 
+        /// <summary>
+        /// Explicit engine-off request for a parked Public Transit vehicle.
+        /// Unlike a generic toggle, this operation is idempotent and never
+        /// accidentally starts the engine. VF owns the actual ignition state.
+        /// </summary>
+        public static bool TrySwitchIgnitionOff(Thing vehicle, out string reason)
+        {
+            reason = null;
+            if (!IsVehicle(vehicle) || vehicle.Destroyed || !vehicle.Spawned)
+            {
+                reason = "vehicle unavailable";
+                return false;
+            }
+            try
+            {
+                object controller = ReadMember(vehicle, "ignition", "Ignition");
+                if (controller == null)
+                {
+                    reason = "VF ignition controller unavailable";
+                    return false;
+                }
+                object current = ReadMember(controller, "Drafted", "Ignited",
+                    "IgnitionOn", "EngineOn", "IsIgnited");
+                if (current is bool && !(bool)current) return true;
+                if (!TryWriteBoolMember(controller, false, "Drafted", "Ignited",
+                    "IgnitionOn", "EngineOn") && !TryInvokeIgnitionOff(controller))
+                {
+                    reason = "VF has no supported ignition-off setter";
+                    return false;
+                }
+                object after = ReadMember(controller, "Drafted", "Ignited",
+                    "IgnitionOn", "EngineOn", "IsIgnited");
+                if (after is bool && (bool)after)
+                {
+                    reason = "VF still reports ignition on after shutdown request";
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                reason = "VF ignition-off failed: " + (ex.InnerException ?? ex).Message;
+                return false;
+            }
+        }
+
+        private static bool TryInvokeIgnitionOff(object controller)
+        {
+            foreach (string name in new[] { "SetIgnition", "SetDrafted" })
+            {
+                MethodInfo method = controller.GetType().GetMethod(name, InstanceMembers,
+                    null, new[] { typeof(bool) }, null);
+                if (method == null) continue;
+                method.Invoke(controller, new object[] { false });
+                return true;
+            }
+            foreach (string name in new[] { "StopEngine", "TurnOff", "ShutDownEngine" })
+            {
+                MethodInfo method = controller.GetType().GetMethod(name, InstanceMembers,
+                    null, Type.EmptyTypes, null);
+                if (method == null) continue;
+                method.Invoke(controller, null);
+                return true;
+            }
+            return false;
+        }
+
         private static bool TryWriteBoolMember(object instance, bool value, params string[] names)
         {
             for (Type type = instance.GetType(); type != null; type = type.BaseType)

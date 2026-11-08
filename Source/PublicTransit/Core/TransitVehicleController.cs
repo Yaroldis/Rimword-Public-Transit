@@ -53,6 +53,7 @@ namespace PublicTransit.Core
                 error = "PT_DriveApiUnsupported".Translate(vfError).ToString();
             if (error != null) return false;
 
+            route.EndDriverBreak();
             route.SetServiceEnabled(true);
             route.SetRunState(TransitRunState.WaitingForDriver);
             watches.Remove(route);
@@ -72,8 +73,8 @@ namespace PublicTransit.Core
         }
 
         /// <summary>
-        /// Stops movement; deliberately leaves VF ignition alone so the player
-        /// retains control over the engine outside of Public Transit service.
+        /// Ends the active shift. Stopping the vehicle is followed by VF
+        /// disembark and a separate explicit ignition-off request.
         /// </summary>
         public void Stop(TransitRoute route)
         {
@@ -95,14 +96,10 @@ namespace PublicTransit.Core
                 && driver.CurJob.def.defName == "PT_BoardTransitDriver")
                 driver.jobs.EndCurrentJob(Verse.AI.JobCondition.InterruptForced);
 
-            // Never remove crew directly from a VF ThingOwner: VF owns pawn
-            // spawn/despawn, seat reservations and post-disembark notifications.
-            if (wasRunning && stopped && driver != null && vehicle != null
-                && VehicleAdapter.IsPawnDriving(vehicle, driver)
-                && !VehicleAdapter.TryDisembarkDriver(vehicle, driver, out string exitError))
-                Log.Warning("[Public Transit] Unable to disembark driver on line '"
-                    + route.DisplayName + "': " + exitError);
+            if (wasRunning && stopped && vehicle != null)
+                EndShiftAtStop(route, vehicle, driver);
 
+            route.EndDriverBreak();
             route.SetServiceEnabled(false);
             route.SetDestinationCell(IntVec3.Invalid);
             watches.Remove(route);
@@ -126,6 +123,14 @@ namespace PublicTransit.Core
                 return;
             }
 
+            // A break keeps the service enabled, but prevents dispatch while
+            // the driver is on foot eating, sleeping or recreating.
+            if (route.DriverOnBreak)
+            {
+                route.SetRunState(TransitRunState.DriverBreak);
+                return;
+            }
+
             // With no shift assigned, preserve the old manual-VF boarding mode.
             // With a specific driver assigned, require THAT pawn in the driver seat.
             bool driverReady = route.AssignedDriver == null
@@ -142,10 +147,32 @@ namespace PublicTransit.Core
                         return;
                     }
                 }
-                route.SetRunState(TransitRunState.WaitingForDriver);
+                // The driver can also leave manually while a line is running.
+                // Once the vehicle has stopped, don't keep consuming fuel.
+                if (!VehicleAdapter.TrySwitchIgnitionOff(vehicle, out string shutdownReason)
+                    && route.RunState != TransitRunState.WaitingForDriver)
+                    Log.Warning("[Public Transit] Driver left but ignition could not be disabled: "
+                        + shutdownReason);
+                // If VF or the player made the driver leave during a planned
+                // break trip, treat it as an early break rather than locking
+                // the route forever in break-pending with no driver aboard.
+                if (route.DriverBreakPending && route.AssignedDriver != null)
+                {
+                    route.BeginDriverBreak();
+                    route.SetRunState(TransitRunState.DriverBreak);
+                }
+                else
+                    route.SetRunState(TransitRunState.WaitingForDriver);
                 watches.Remove(route);
                 lastIgnitionWarning.Remove(route);
                 return;
+            }
+
+            if (!route.DriverBreakPending && route.AssignedDriver != null
+                && DriverNeedsPlanner.NeedsBreak(route.AssignedDriver,
+                    PublicTransitMod.DriverBreakNeedThreshold))
+            {
+                if (!RequestNeedsBreak(route, vehicle, tick)) return;
             }
 
             // VehiclePawn.CanMoveFinal is NOT sufficient by itself to detect an
@@ -206,7 +233,7 @@ namespace PublicTransit.Core
             Building_TransitStop stop = route.Stops[route.NextStopIndex];
             if (IsDockedAtStop(vehicle, stop))
             {
-                Arrive(route, tick);
+                Arrive(route, vehicle, tick);
                 return;
             }
             if (!TryGetDockingCell(stop, vehicle, null, out IntVec3 destination))
@@ -258,7 +285,7 @@ namespace PublicTransit.Core
                 // The footprint being beside the stop is authoritative for
                 // docking. VF can briefly be updating its internal path state.
                 if (moving) VehicleAdapter.TryStop(vehicle, out string unused);
-                Arrive(route, tick);
+                Arrive(route, vehicle, tick);
                 return;
             }
             if (!watches.TryGetValue(route, out TravelWatch watch))
@@ -355,13 +382,98 @@ namespace PublicTransit.Core
                     + "' (" + reason + ")");
         }
 
-        private void Arrive(TransitRoute route, int tick)
+        private bool RequestNeedsBreak(TransitRoute route, Thing vehicle, int tick)
         {
+            int index = DriverNeedsPlanner.FindBreakStop(route, map, route.AssignedDriver,
+                vehicle.Position,
+                stop => IsDockedAtStop(vehicle, stop)
+                    || TryGetDockingCell(stop, vehicle, null, out IntVec3 unused),
+                out bool foodNearby);
+            if (index < 0)
+            {
+                Block(route, "no dockable stop for exhausted driver");
+                return false;
+            }
+
+            route.RequestDriverBreak(index);
+            if (!foodNearby)
+                Messages.Message("PT_DriverBreakNoFood".Translate(route.AssignedDriver.LabelShortCap),
+                    MessageTypeDefOf.NegativeEvent, false);
+            else
+                Messages.Message("PT_DriverBreakRequested".Translate(route.AssignedDriver.LabelShortCap,
+                    route.Stops[index].StopName), MessageTypeDefOf.NeutralEvent, false);
+
+            // Already at the chosen stop: do not restart ignition just to
+            // notice on the next tick that a break can start immediately.
+            if (IsDockedAtStop(vehicle, route.Stops[index]))
+            {
+                route.SetNextStopIndex(index);
+                Arrive(route, vehicle, tick);
+                return false; // Arrive handled the break (or failed closed).
+            }
+
+            // If VF is already travelling to this stop, keep its successful
+            // Goto job intact. Otherwise replace it with a new leg to the break stop.
+            if (route.NextStopIndex != index)
+            {
+                if (!VehicleAdapter.TryStop(vehicle, out string error))
+                {
+                    Block(route, "could not divert vehicle for driver break: " + error);
+                    return false;
+                }
+                route.SetNextStopIndex(index);
+                route.SetDestinationCell(IntVec3.Invalid);
+                route.SetRunState(TransitRunState.WaitingForDriver);
+                watches.Remove(route);
+            }
+            return true;
+        }
+
+        private void Arrive(TransitRoute route, Thing vehicle, int tick)
+        {
+            if (route.DriverBreakPending
+                && route.NextStopIndex == route.DriverBreakStopIndex)
+            {
+                if (!VehicleAdapter.TryStop(vehicle, out string error))
+                {
+                    Block(route, "cannot stop for driver break: " + error);
+                    return;
+                }
+                if (!EndShiftAtStop(route, vehicle, route.AssignedDriver))
+                {
+                    Block(route, "cannot finish driver break: VF exit or ignition failed");
+                    return;
+                }
+                route.BeginDriverBreak();
+                route.SetRunState(TransitRunState.DriverBreak);
+                route.SetDestinationCell(IntVec3.Invalid);
+                route.SetNextStopIndex((route.NextStopIndex + 1) % route.Stops.Count);
+                watches.Remove(route);
+                return;
+            }
             route.SetRunState(TransitRunState.Dwelling);
             route.SetDwellUntilTick(tick + StopWaitTicks);
             route.SetDestinationCell(IntVec3.Invalid);
             route.SetNextStopIndex((route.NextStopIndex + 1) % route.Stops.Count);
             watches.Remove(route);
+        }
+
+        private static bool EndShiftAtStop(TransitRoute route, Thing vehicle, Pawn driver)
+        {
+            // VF alone performs seat exit; we never spawn or remove its pawn.
+            bool disembarked = true;
+            if (driver != null && VehicleAdapter.IsPawnDriving(vehicle, driver))
+            {
+                disembarked = VehicleAdapter.TryDisembarkDriver(vehicle, driver, out string error);
+                if (!disembarked)
+                    Log.Warning("[Public Transit] Driver exit failed on '"
+                        + route.DisplayName + "': " + error);
+            }
+            bool ignitionOff = VehicleAdapter.TrySwitchIgnitionOff(vehicle, out string ignitionError);
+            if (!ignitionOff)
+                Log.Warning("[Public Transit] Engine shutdown failed on '"
+                    + route.DisplayName + "': " + ignitionError);
+            return disembarked && ignitionOff;
         }
 
         private void Block(TransitRoute route, string reason)

@@ -12,6 +12,8 @@ namespace PublicTransit
 
         public static float DamageUnassignThreshold => settings == null
             ? 0.5f : settings.DamageUnassignThreshold;
+        public static float DriverBreakNeedThreshold => settings == null
+            ? 0.20f : settings.DriverBreakNeedThreshold;
 
         public PublicTransitMod(ModContentPack content) : base(content)
         {
@@ -34,6 +36,12 @@ namespace PublicTransit
             listing.CheckboxLabeled("PT_ExperimentalDriverBoardingSetting".Translate().ToString(),
                 ref settings.EnableExperimentalDriverBoarding);
             listing.Label("PT_ExperimentalDriverBoardingDescription".Translate().ToString());
+            listing.GapLine();
+            listing.Label("PT_DriverBreakThresholdSetting".Translate(
+                (int)(DriverBreakNeedThreshold * 100f)).ToString());
+            settings.DriverBreakNeedThreshold = listing.Slider(
+                settings.DriverBreakNeedThreshold, 0.05f, 0.40f);
+            listing.Label("PT_DriverBreakThresholdDescription".Translate().ToString());
             listing.End();
         }
     }

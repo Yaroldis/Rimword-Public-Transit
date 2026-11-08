@@ -211,7 +211,17 @@ namespace PublicTransit.Core
         /// </summary>
         private void DispatchDriverJobs()
         {
-            if (routes == null || !PublicTransitMod.ExperimentalDriverBoardingEnabled) return;
+            if (routes == null) return;
+            // Recovery is independent of whether automatic boarding is enabled.
+            foreach (TransitRoute route in routes)
+                if (route != null && route.ServiceEnabled && route.DriverOnBreak
+                    && DriverNeedsPlanner.ReadyToReturn(route.AssignedDriver))
+                {
+                    route.EndDriverBreak();
+                    if (route.AssignedDriver != null)
+                        nextBoardAttemptTick.Remove(route.AssignedDriver);
+                }
+            if (!PublicTransitMod.ExperimentalDriverBoardingEnabled) return;
             JobDef jobDef = DefDatabase<JobDef>.GetNamedSilentFail("PT_BoardTransitDriver");
             if (jobDef == null) return;
             foreach (TransitRoute route in routes)
@@ -219,7 +229,11 @@ namespace PublicTransit.Core
                 if (route == null || !route.ServiceEnabled || route.AssignedVehicle == null)
                     continue;
                 Pawn pawn = route.AssignedDriver;
-                if (!CanBeTransitDriver(pawn) || pawn.Drafted || pawn.InMentalState)
+                if (route.DriverBreakPending) continue;
+                if (route.DriverOnBreak) continue;
+                if (!CanBeTransitDriver(pawn) || pawn.Drafted || pawn.InMentalState
+                    || DriverNeedsPlanner.NeedsBreak(pawn,
+                        PublicTransitMod.DriverBreakNeedThreshold))
                     continue;
                 Thing vehicle = route.AssignedVehicle;
                 if (!VehicleAdapter.CanAssign(vehicle, map) || VehicleAdapter.IsTrain(vehicle)
@@ -398,6 +412,7 @@ namespace PublicTransit.Core
             switch (route.RunState)
             {
                 case TransitRunState.WaitingForDriver: return "PT_DriveWaitingDriver".Translate();
+                case TransitRunState.DriverBreak: return "PT_DriverOnBreakStatus".Translate();
                 case TransitRunState.WaitingForEngine: return "PT_DriveWaitingEngine".Translate();
                 case TransitRunState.Moving:
                     string stopName = route.NextStopIndex >= 0 && route.NextStopIndex < route.Stops.Count

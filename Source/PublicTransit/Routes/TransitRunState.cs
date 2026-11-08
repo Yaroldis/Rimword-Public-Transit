@@ -9,6 +9,7 @@ namespace PublicTransit.Routes
         Moving,
         Blocked,
         Recovering,
-        WaitingForEngine
+        WaitingForEngine,
+        DriverBreak
     }
 }

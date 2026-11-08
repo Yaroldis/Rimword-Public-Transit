@@ -26,6 +26,10 @@ namespace PublicTransit.Routes
         private int nextStopIndex;
         private int dwellUntilTick;
         private IntVec3 destinationCell = IntVec3.Invalid;
+        // 0.5.2: urgent driver break is distinct from stopping the line.
+        private bool driverBreakPending;
+        private bool driverOnBreak;
+        private int driverBreakStopIndex = -1;
 
         public TransitRoute() { } // Scribe requires a parameterless constructor.
 
@@ -45,6 +49,9 @@ namespace PublicTransit.Routes
         public int NextStopIndex => nextStopIndex;
         public int DwellUntilTick => dwellUntilTick;
         public IntVec3 DestinationCell => destinationCell;
+        public bool DriverBreakPending => driverBreakPending;
+        public bool DriverOnBreak => driverOnBreak;
+        public int DriverBreakStopIndex => driverBreakStopIndex;
 
         internal void SetServiceEnabled(bool enabled)
         {
@@ -56,6 +63,24 @@ namespace PublicTransit.Routes
         internal void SetNextStopIndex(int index) => nextStopIndex = index;
         internal void SetDwellUntilTick(int tick) => dwellUntilTick = tick;
         internal void SetDestinationCell(IntVec3 cell) => destinationCell = cell;
+        internal void RequestDriverBreak(int stopIndex)
+        {
+            driverBreakPending = true;
+            driverOnBreak = false;
+            driverBreakStopIndex = stopIndex;
+        }
+        internal void BeginDriverBreak()
+        {
+            driverBreakPending = false;
+            driverOnBreak = true;
+            driverBreakStopIndex = -1;
+        }
+        internal void EndDriverBreak()
+        {
+            driverBreakPending = false;
+            driverOnBreak = false;
+            driverBreakStopIndex = -1;
+        }
 
         // Only TransitMapComponent changes assignments: it validates ownership,
         // map and exclusivity across all lines.
@@ -110,12 +135,17 @@ namespace PublicTransit.Routes
             Scribe_Values.Look(ref nextStopIndex, "PT_nextStopIndex", 0);
             Scribe_Values.Look(ref dwellUntilTick, "PT_dwellUntilTick", 0);
             Scribe_Values.Look(ref destinationCell, "PT_destinationCell", IntVec3.Invalid);
+            Scribe_Values.Look(ref driverBreakPending, "PT_driverBreakPending", false);
+            Scribe_Values.Look(ref driverOnBreak, "PT_driverOnBreak", false);
+            Scribe_Values.Look(ref driverBreakStopIndex, "PT_driverBreakStopIndex", -1);
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
                 if (stops == null) stops = new List<Building_TransitStop>();
                 if (string.IsNullOrWhiteSpace(id)) id = Guid.NewGuid().ToString("N");
                 if (string.IsNullOrWhiteSpace(displayName)) displayName = "Route";
                 if (nextStopIndex < 0 || nextStopIndex >= stops.Count) nextStopIndex = 0;
+                if (driverBreakPending && (driverBreakStopIndex < 0
+                    || driverBreakStopIndex >= stops.Count)) EndDriverBreak();
                 // Never restart an old movement command while Scribe is resolving the map.
                 // The map controller will resume or reissue it after the first tick.
                 if (serviceEnabled && runState == TransitRunState.Moving)

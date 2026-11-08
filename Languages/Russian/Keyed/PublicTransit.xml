@@ -84,4 +84,9 @@
   <PT_DockingEast>восток</PT_DockingEast>
   <PT_DockingSouth>юг</PT_DockingSouth>
   <PT_DockingWest>запад</PT_DockingWest>
+  <PT_DriverBreakThresholdSetting>Перерыв водителя при потребностях ≤ {0}%</PT_DriverBreakThresholdSetting>
+  <PT_DriverBreakThresholdDescription>Голод, отдых или досуг. Возвращение на смену после восстановления всех трёх до 60%.</PT_DriverBreakThresholdDescription>
+  <PT_DriverBreakRequested>{0}: заканчивает рейс на остановке «{1}», затем выходит на перерыв.</PT_DriverBreakRequested>
+  <PT_DriverBreakNoFood>{0}: рядом с остановками нет доступной еды. Водитель выйдет на ближайшей подходящей остановке.</PT_DriverBreakNoFood>
+  <PT_DriverOnBreakStatus>перерыв водителя (еда / сон / отдых)</PT_DriverOnBreakStatus>
 </LanguageData>

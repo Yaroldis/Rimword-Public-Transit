@@ -84,4 +84,9 @@
   <PT_DockingEast>east</PT_DockingEast>
   <PT_DockingSouth>south</PT_DockingSouth>
   <PT_DockingWest>west</PT_DockingWest>
+  <PT_DriverBreakThresholdSetting>Driver break when needs ≤ {0}%</PT_DriverBreakThresholdSetting>
+  <PT_DriverBreakThresholdDescription>Food, rest or recreation. The driver returns after all three recover to 60%.</PT_DriverBreakThresholdDescription>
+  <PT_DriverBreakRequested>{0}: heading to stop "{1}" before taking a break.</PT_DriverBreakRequested>
+  <PT_DriverBreakNoFood>{0}: no accessible food near the line stops. Driver will exit at the nearest dockable stop.</PT_DriverBreakNoFood>
+  <PT_DriverOnBreakStatus>driver break (food / sleep / recreation)</PT_DriverOnBreakStatus>
 </LanguageData>
