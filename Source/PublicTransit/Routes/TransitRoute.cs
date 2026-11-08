@@ -16,6 +16,8 @@ namespace PublicTransit.Routes
         // Save a reference to the actual VF vehicle, never the vehicle itself.
         // The vehicle belongs to RimWorld / Vehicle Framework, not this route.
         private Thing assignedVehicle;
+        // 0.5.0: player-selected driver. A reference, not a copy of the pawn.
+        private Pawn assignedDriver;
 
         // 0.4.0: service is opt-in; route logic persists with the colony save.
         // A separate controller issues vehicle commands via the VF adapter.
@@ -37,6 +39,7 @@ namespace PublicTransit.Routes
         public string DisplayName => displayName;
         public IReadOnlyList<Building_TransitStop> Stops => stops;
         public Thing AssignedVehicle => assignedVehicle;
+        public Pawn AssignedDriver => assignedDriver;
         public bool ServiceEnabled => serviceEnabled;
         public TransitRunState RunState => runState;
         public int NextStopIndex => nextStopIndex;
@@ -57,6 +60,7 @@ namespace PublicTransit.Routes
         // Only TransitMapComponent changes assignments: it validates ownership,
         // map and exclusivity across all lines.
         internal void SetAssignedVehicle(Thing vehicle) => assignedVehicle = vehicle;
+        internal void SetAssignedDriver(Pawn pawn) => assignedDriver = pawn;
 
         public void Rename(string name)
         {
@@ -100,6 +104,7 @@ namespace PublicTransit.Routes
             Scribe_Values.Look(ref displayName, "displayName");
             Scribe_Collections.Look(ref stops, "stops", LookMode.Reference);
             Scribe_References.Look(ref assignedVehicle, "assignedVehicle");
+            Scribe_References.Look(ref assignedDriver, "PT_assignedDriver");
             Scribe_Values.Look(ref serviceEnabled, "PT_serviceEnabled", false);
             Scribe_Values.Look(ref runState, "PT_runState", TransitRunState.Stopped);
             Scribe_Values.Look(ref nextStopIndex, "PT_nextStopIndex", 0);

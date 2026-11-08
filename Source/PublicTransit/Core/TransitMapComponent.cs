@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using PublicTransit.Buildings;
 using PublicTransit.Routes;
 using RimWorld;
+using Verse.AI;
 using Verse;
 
 namespace PublicTransit.Core
@@ -15,6 +16,8 @@ namespace PublicTransit.Core
     {
         private List<TransitRoute> routes = new List<TransitRoute>();
         private readonly HashSet<Building_TransitStop> registeredStops = new HashSet<Building_TransitStop>();
+        // Do not spam VF boarding attempts when a mod build lacks the required API.
+        private readonly Dictionary<Pawn, int> nextBoardAttemptTick = new Dictionary<Pawn, int>();
         private TransitVehicleController driving;
         private TransitVehicleController Driving => driving ??
             (driving = new TransitVehicleController(map));
@@ -121,6 +124,103 @@ namespace PublicTransit.Core
             return false;
         }
 
+
+        /// <summary>
+        /// Opt-in driver roster: never recruit an arbitrary colonist automatically.
+        /// A pawn can be assigned to at most one line, regardless of vehicle type.
+        /// </summary>
+        public List<Pawn> GetAssignableDrivers(TransitRoute targetRoute)
+        {
+            var result = new List<Pawn>();
+            if (targetRoute == null || routes == null || !routes.Contains(targetRoute)
+                || map?.mapPawns == null) return result;
+            foreach (Pawn pawn in map.mapPawns.FreeColonistsSpawned)
+            {
+                if (CanBeTransitDriver(pawn) && !DriverAssignedElsewhere(pawn, targetRoute))
+                    result.Add(pawn);
+            }
+            result.Sort((a, b) => string.Compare(a.LabelShortCap.ToString(),
+                b.LabelShortCap.ToString(), StringComparison.CurrentCultureIgnoreCase));
+            return result;
+        }
+
+        private bool DriverAssignedElsewhere(Pawn pawn, TransitRoute except)
+        {
+            foreach (TransitRoute route in routes)
+                if (route != null && route != except && route.AssignedDriver == pawn)
+                    return true;
+            return false;
+        }
+
+        public bool TryAssignDriver(TransitRoute route, Pawn pawn, out string error)
+        {
+            error = null;
+            if (route == null || routes == null || !routes.Contains(route))
+                error = "PT_VehicleRouteMissing".Translate().ToString();
+            else if (!CanBeTransitDriver(pawn))
+                error = "PT_DriverUnavailable".Translate().ToString();
+            else if (DriverAssignedElsewhere(pawn, route))
+                error = "PT_DriverAlreadyAssigned".Translate().ToString();
+            if (error != null) return false;
+            Driving.Stop(route); // Driver change may not happen during travel.
+            route.SetAssignedDriver(pawn);
+            return true;
+        }
+
+        public void UnassignDriver(TransitRoute route)
+        {
+            if (route == null || routes == null || !routes.Contains(route)) return;
+            Driving.Stop(route);
+            route.SetAssignedDriver(null);
+            // Do not forcibly eject an existing crew member; let VF handle disembarking.
+        }
+
+        private bool CanBeTransitDriver(Pawn pawn)
+        {
+            return pawn != null && !pawn.Dead && !pawn.Downed && pawn.Spawned
+                && pawn.Map == map && pawn.Faction == Faction.OfPlayer
+                && pawn.RaceProps.Humanlike && !pawn.IsPrisoner;
+        }
+
+        /// <summary>
+        /// An assigned, available and idle colonist receives a normal RimWorld Job.
+        /// Never interrupt combat, medical work or other ongoing player tasks.
+        /// The boarding JobDriver walks up to the vehicle; VF owns the actual seat.
+        /// </summary>
+        private void DispatchDriverJobs()
+        {
+            if (routes == null || !PublicTransitMod.ExperimentalDriverBoardingEnabled) return;
+            JobDef jobDef = DefDatabase<JobDef>.GetNamedSilentFail("PT_BoardTransitDriver");
+            if (jobDef == null) return;
+            foreach (TransitRoute route in routes)
+            {
+                if (route == null || !route.ServiceEnabled || route.AssignedVehicle == null)
+                    continue;
+                Pawn pawn = route.AssignedDriver;
+                if (!CanBeTransitDriver(pawn) || pawn.Drafted || pawn.InMentalState)
+                    continue;
+                Thing vehicle = route.AssignedVehicle;
+                if (!VehicleAdapter.CanAssign(vehicle, map) || VehicleAdapter.IsTrain(vehicle)
+                    || IsVehicleOverDamageThreshold(vehicle)
+                    || VehicleAdapter.HasActiveDriver(vehicle)) continue;
+                // Do not overwrite an existing task, including a manually issued VF boarding task.
+                Job current = pawn.CurJob;
+                if (current != null && (current.def == null ||
+                    (current.def != JobDefOf.Wait
+                        && current.def.defName != "Wait_Wander"))) continue;
+                if (pawn.jobs == null) continue;
+                int now = Find.TickManager.TicksGame;
+                if (nextBoardAttemptTick.TryGetValue(pawn, out int due) && now < due)
+                    continue;
+                // One attempt at most every 2,500 ticks (especially useful if VF
+                // exposes a different boarding API and this Job must fail closed).
+                nextBoardAttemptTick[pawn] = now + 2500;
+                Job boarding = JobMaker.MakeJob(jobDef, new LocalTargetInfo(vehicle));
+                boarding.playerForced = true;
+                pawn.jobs.TryTakeOrderedJob(boarding);
+            }
+        }
+
         /// <summary>Assign a valid VF vehicle to exactly one line on this map.</summary>
         public bool TryAssignVehicle(TransitRoute route, Thing vehicle, out string error)
         {
@@ -221,7 +321,16 @@ namespace PublicTransit.Core
             // Only once per 250 game ticks, never for every pawn every tick.
             int tick = Find.TickManager.TicksGame;
             if (tick % 250 == 0)
+            {
                 RepairVehicleAssignments(true);
+                foreach (TransitRoute route in routes)
+                    if (route?.AssignedDriver != null && route.AssignedDriver.Dead)
+                    {
+                        Driving.Stop(route);
+                        route.SetAssignedDriver(null);
+                    }
+                DispatchDriverJobs();
+            }
             if (tick % 30 == 0 && routes != null)
                 foreach (TransitRoute route in routes)
                     if (route != null && route.ServiceEnabled)

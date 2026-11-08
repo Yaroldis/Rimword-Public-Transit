@@ -48,8 +48,18 @@ def main():
         "Source/PublicTransit/Core/TransitVehicleController.cs",
         "Source/PublicTransit/Core/VehicleAdapter.cs",
         "Source/PublicTransit/Routes/TransitRunState.cs",
+        "Source/PublicTransit/Jobs/JobDriver_BoardTransitDriver.cs",
     ):
         require((ROOT / relative).is_file(), f"Required C# file missing: {relative}")
+    job_defs = ET.parse(ROOT / "Defs" / "JobDefs" / "TransitDriverJobs.xml").getroot()
+    job = next((n for n in job_defs.findall("JobDef")
+        if n.findtext("defName") == "PT_BoardTransitDriver"), None)
+    require(job is not None and job.findtext("driverClass") ==
+        "PublicTransit.Jobs.JobDriver_BoardTransitDriver", "Invalid boarding JobDef")
+    for language in ("Russian", "English"):
+        injected = ET.parse(ROOT / "Languages" / language / "DefInjected" / "JobDef" / "TransitDriverJobs.xml").getroot()
+        require(injected.findtext("PT_BoardTransitDriver.reportString"),
+            f"{language}: boarding job translation missing")
     # Verify every keyed translation used in C# exists in both languages.
     keyed = {}
     for language in ("Russian", "English"):

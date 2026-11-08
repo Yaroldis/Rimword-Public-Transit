@@ -245,6 +245,114 @@ namespace PublicTransit.Core
             }
         }
 
+        /// <summary>
+        /// 0.5: when a line has a specifically assigned driver, the mere presence
+        /// of SOME driver in the vehicle must not count as fulfilling that shift.
+        /// </summary>
+        public static bool IsPawnDriving(Thing vehicle, Pawn pawn)
+        {
+            if (pawn == null || pawn.Dead || pawn.Downed || !IsVehicle(vehicle)) return false;
+            try
+            {
+                var handlers = ReadMember(vehicle, "handlers", "Handlers") as IEnumerable;
+                if (handlers == null) return false;
+                foreach (object handler in handlers)
+                {
+                    if (handler == null || !IsDrivingRole(ReadMember(handler, "role", "Role")))
+                        continue;
+                    var aboard = ReadMember(handler, "thingOwner", "ThingOwner") as IEnumerable;
+                    if (aboard == null) continue;
+                    foreach (object occupant in aboard)
+                        if (ReferenceEquals(occupant, pawn)) return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[Public Transit] Assigned driver read failed: " + ex.GetType().Name);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Experimental 0.5 boarding integration. The JobDriver first walks to
+        /// the vehicle. Only then use VF's own TryAddPawn(Pawn, VehicleRoleHandler)
+        /// if the installed build exposes it; fail closed when it does not.
+        /// No teleportation, manual ThingOwner manipulation or despawn hacks.
+        /// </summary>
+        public static bool TryBoardDriver(Pawn pawn, Thing vehicle, out string error)
+        {
+            error = null;
+            if (pawn == null || !pawn.Spawned || pawn.Dead || pawn.Downed || pawn.Drafted
+                || !CanAssign(vehicle, pawn.Map) || IsTrain(vehicle))
+            {
+                error = "driver or vehicle unavailable";
+                return false;
+            }
+            if (IsPawnDriving(vehicle, pawn)) return true;
+            if (HasActiveDriver(vehicle))
+            {
+                error = "driver seat already occupied";
+                return false;
+            }
+            try
+            {
+                var handlers = ReadMember(vehicle, "handlers", "Handlers") as IEnumerable;
+                if (handlers == null)
+                {
+                    error = "VF vehicle handlers unavailable";
+                    return false;
+                }
+                foreach (object handler in handlers)
+                {
+                    if (handler == null || !IsDrivingRole(ReadMember(handler, "role", "Role")))
+                        continue;
+                    object owner = ReadMember(handler, "thingOwner", "ThingOwner");
+                    var occupants = owner as IEnumerable;
+                    if (occupants == null) continue;
+                    bool occupied = false;
+                    foreach (object _ in occupants) { occupied = true; break; }
+                    if (occupied) continue;
+
+                    MethodInfo boarding = null;
+                    foreach (MethodInfo method in vehicle.GetType().GetMethods(InstanceMembers))
+                    {
+                        if (method.Name != "TryAddPawn") continue;
+                        ParameterInfo[] args = method.GetParameters();
+                        if (args.Length == 2 && args[0].ParameterType.IsAssignableFrom(typeof(Pawn))
+                            && args[1].ParameterType.IsInstanceOfType(handler))
+                        {
+                            boarding = method;
+                            break;
+                        }
+                    }
+                    if (boarding == null)
+                    {
+                        error = "VF TryAddPawn(Pawn, handler) API unavailable";
+                        return false;
+                    }
+                    object result = boarding.Invoke(vehicle, new[] { (object)pawn, handler });
+                    if (result is bool && !(bool)result)
+                    {
+                        error = "VF declined driver boarding";
+                        return false;
+                    }
+                    if (!IsPawnDriving(vehicle, pawn))
+                    {
+                        error = "VF accepted boarding but driver role is not confirmed";
+                        return false;
+                    }
+                    return true;
+                }
+                error = "no free VF driver role found";
+                return false;
+            }
+            catch (Exception ex)
+            {
+                error = "VF boarding exception: " + (ex.InnerException ?? ex).Message;
+                return false;
+            }
+        }
+
         private static bool IsDrivingRole(object role)
         {
             if (role == null) return false;

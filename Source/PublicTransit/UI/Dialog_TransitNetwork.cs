@@ -11,7 +11,7 @@ namespace PublicTransit.UI
 {
     /// <summary>
     /// A first, intentionally simple editor for a network of ordered stops.
-    /// 0.4.0 adds opt-in autonomous driving; boarding remains manual.
+    /// 0.5.0 adds an opt-in driver roster and experimental boarding job.
     /// </summary>
     public sealed class Dialog_TransitNetwork : Window
     {
@@ -46,7 +46,7 @@ namespace PublicTransit.UI
             float viewWidth = scrollRect.width - 20f;
             float height = 10f;
             foreach (TransitRoute route in network.Routes)
-                height += 144f + Math.Max(1, route.Stops.Count) * 28f;
+                height += 210f + Math.Max(1, route.Stops.Count) * 28f;
             height = Math.Max(scrollRect.height, height);
 
             Widgets.BeginScrollView(scrollRect, ref scrollPosition, new Rect(0f, 0f, viewWidth, height));
@@ -97,6 +97,7 @@ namespace PublicTransit.UI
             }
             y += 38f;
             DrawVehicleAssignment(network, route, width, ref y);
+            DrawDriverAssignment(network, route, width, ref y);
 
             if (route.Stops.Count == 0)
             {
@@ -166,6 +167,51 @@ namespace PublicTransit.UI
             Widgets.Label(new Rect(214f, y + 2f, width - 224f, 26f),
                 "PT_DriveManualDriverHint".Translate());
             y += 32f;
+        }
+
+        private static void DrawDriverAssignment(TransitMapComponent network, TransitRoute route,
+            float width, ref float y)
+        {
+            Pawn driver = route.AssignedDriver;
+            string name = driver == null ? "PT_NoDriverAssigned".Translate().ToString()
+                : driver.LabelShortCap.ToString();
+            Widgets.Label(new Rect(28f, y + 2f, width - 330f, 26f),
+                "PT_DriverOnRoute".Translate(name));
+            string change = driver == null ? "PT_AssignDriver".Translate().ToString()
+                : "PT_ChangeDriver".Translate().ToString();
+            if (Widgets.ButtonText(new Rect(width - 297f, y, 152f, 26f), change))
+                ChooseDriver(network, route);
+            if (driver != null && Widgets.ButtonText(new Rect(width - 139f, y, 133f, 26f),
+                "PT_UnassignDriver".Translate()))
+                network.UnassignDriver(route);
+            y += 31f;
+            Widgets.Label(new Rect(28f, y, width - 34f, 26f),
+                driver == null ? "PT_DriverManualMode".Translate()
+                    : PublicTransitMod.ExperimentalDriverBoardingEnabled
+                        ? "PT_DriverJobHint".Translate()
+                        : "PT_DriverJobDisabledHint".Translate());
+            y += 31f;
+        }
+
+        private static void ChooseDriver(TransitMapComponent network, TransitRoute route)
+        {
+            var options = new List<FloatMenuOption>();
+            foreach (Pawn pawn in network.GetAssignableDrivers(route))
+            {
+                Pawn candidate = pawn;
+                options.Add(new FloatMenuOption(candidate.LabelShortCap, () =>
+                {
+                    if (!network.TryAssignDriver(route, candidate, out string error))
+                        Messages.Message(error, MessageTypeDefOf.RejectInput, false);
+                }));
+            }
+            if (options.Count == 0)
+            {
+                Messages.Message("PT_NoAssignableDrivers".Translate(),
+                    MessageTypeDefOf.RejectInput, false);
+                return;
+            }
+            Find.WindowStack.Add(new FloatMenu(options));
         }
 
         private static void ChooseVehicle(TransitMapComponent network, TransitRoute route)

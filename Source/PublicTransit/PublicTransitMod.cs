@@ -7,6 +7,9 @@ namespace PublicTransit
     {
         private static PublicTransitSettings settings;
 
+        public static bool ExperimentalDriverBoardingEnabled =>
+            settings != null && settings.EnableExperimentalDriverBoarding;
+
         public static float DamageUnassignThreshold => settings == null
             ? 0.5f : settings.DamageUnassignThreshold;
 
@@ -27,6 +30,10 @@ namespace PublicTransit
             settings.DamageUnassignThreshold = listing.Slider(
                 settings.DamageUnassignThreshold, 0.10f, 1.0f);
             listing.Label("PT_DamageThresholdDescription".Translate().ToString());
+            listing.GapLine();
+            listing.CheckboxLabeled("PT_ExperimentalDriverBoardingSetting".Translate().ToString(),
+                ref settings.EnableExperimentalDriverBoarding);
+            listing.Label("PT_ExperimentalDriverBoardingDescription".Translate().ToString());
             listing.End();
         }
     }

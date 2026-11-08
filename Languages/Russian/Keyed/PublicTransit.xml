@@ -10,7 +10,7 @@
   <PT_OpenNetworkDesc>Открыть список линий и изменить порядок остановок.</PT_OpenNetworkDesc>
   <PT_DefaultRouteName>Линия {0}</PT_DefaultRouteName>
   <PT_NetworkSummary>Транспортная сеть — линий: {0}, остановок: {1}</PT_NetworkSummary>
-  <PT_NetworkHint>Ручная посадка водителя через VF; линия запускается отдельной кнопкой. Пассажирского ИИ пока нет.</PT_NetworkHint>
+  <PT_NetworkHint>Выбери водителя для линии и запусти её. Пока без автоматического выбора водителей и пассажирского ИИ.</PT_NetworkHint>
   <PT_NoMap>Нет доступной карты.</PT_NoMap>
   <PT_EmptyNetwork>Нет линий. Выберите остановку и создайте первую линию.</PT_EmptyNetwork>
   <PT_NoStops>Сначала постройте хотя бы одну остановку.</PT_NoStops>
@@ -63,4 +63,17 @@
   <PT_DriveBlockedMessage>Линия «{0}» остановлена: проверьте дорогу, водительское место и транспорт.</PT_DriveBlockedMessage>
   <PT_DriveMissingStop>На линии есть отсутствующая или разрушенная остановка.</PT_DriveMissingStop>
   <PT_DriveWaitingEngine>Ожидание запуска двигателя или восстановления готовности транспорта</PT_DriveWaitingEngine>
+  <PT_NoDriverAssigned>не назначен</PT_NoDriverAssigned>
+  <PT_DriverOnRoute>Водитель: {0}</PT_DriverOnRoute>
+  <PT_AssignDriver>Назначить</PT_AssignDriver>
+  <PT_ChangeDriver>Сменить</PT_ChangeDriver>
+  <PT_UnassignDriver>Снять</PT_UnassignDriver>
+  <PT_DriverManualMode>Без назначенной смены: посадка через VF вручную.</PT_DriverManualMode>
+  <PT_DriverJobHint>Назначенный колонист садится за руль автоматически, когда свободен и линия запущена.</PT_DriverJobHint>
+  <PT_DriverUnavailable>Колонист недоступен на этой карте.</PT_DriverUnavailable>
+  <PT_DriverAlreadyAssigned>Колонист уже назначен на другую линию.</PT_DriverAlreadyAssigned>
+  <PT_NoAssignableDrivers>Нет доступных колонистов для назначения.</PT_NoAssignableDrivers>
+  <PT_ExperimentalDriverBoardingSetting>Включить экспериментальную автоматическую посадку назначенных водителей</PT_ExperimentalDriverBoardingSetting>
+  <PT_ExperimentalDriverBoardingDescription>По умолчанию выключено. Совместимость с API VF ещё тестируется. Используйте копию сохранения; ручная посадка остаётся доступной.</PT_ExperimentalDriverBoardingDescription>
+  <PT_DriverJobDisabledHint>Автопосадка выключена в настройках Public Transit. Посади выбранного водителя вручную.</PT_DriverJobDisabledHint>
 </LanguageData>

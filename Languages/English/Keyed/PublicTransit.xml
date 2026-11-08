@@ -10,7 +10,7 @@
   <PT_OpenNetworkDesc>Open the line editor and arrange stops.</PT_OpenNetworkDesc>
   <PT_DefaultRouteName>Line {0}</PT_DefaultRouteName>
   <PT_NetworkSummary>Transit network — {0} lines, {1} stops</PT_NetworkSummary>
-  <PT_NetworkHint>Board driver manually with VF, then use Start line. No passenger AI yet.</PT_NetworkHint>
+  <PT_NetworkHint>Select an optional driver for the line, then Start line. No passenger AI yet.</PT_NetworkHint>
   <PT_NoMap>No available map.</PT_NoMap>
   <PT_EmptyNetwork>No lines yet. Select a stop and create the first line.</PT_EmptyNetwork>
   <PT_NoStops>Build at least one stop first.</PT_NoStops>
@@ -63,4 +63,17 @@
   <PT_DriveBlockedMessage>Line "{0}" stopped: check the road, driver seat, and vehicle.</PT_DriveBlockedMessage>
   <PT_DriveMissingStop>A stop on this line is missing or destroyed.</PT_DriveMissingStop>
   <PT_DriveWaitingEngine>Waiting for ignition or vehicle readiness</PT_DriveWaitingEngine>
+  <PT_NoDriverAssigned>not assigned</PT_NoDriverAssigned>
+  <PT_DriverOnRoute>Driver: {0}</PT_DriverOnRoute>
+  <PT_AssignDriver>Assign driver</PT_AssignDriver>
+  <PT_ChangeDriver>Change driver</PT_ChangeDriver>
+  <PT_UnassignDriver>Clear driver</PT_UnassignDriver>
+  <PT_DriverManualMode>No shift assigned: board a driver manually through VF.</PT_DriverManualMode>
+  <PT_DriverJobHint>Assigned colonist boards automatically when idle and line is started.</PT_DriverJobHint>
+  <PT_DriverUnavailable>Colonist is not available on this map.</PT_DriverUnavailable>
+  <PT_DriverAlreadyAssigned>This colonist is assigned to another transit line.</PT_DriverAlreadyAssigned>
+  <PT_NoAssignableDrivers>No available colonists for driver assignment.</PT_NoAssignableDrivers>
+  <PT_ExperimentalDriverBoardingSetting>Enable experimental automatic boarding for assigned drivers</PT_ExperimentalDriverBoardingSetting>
+  <PT_ExperimentalDriverBoardingDescription>OFF by default. Requires VF boarding API compatibility. Test on a backup save; manual VF boarding remains available.</PT_ExperimentalDriverBoardingDescription>
+  <PT_DriverJobDisabledHint>Automatic boarding is OFF in Public Transit mod settings. Board your chosen driver manually.</PT_DriverJobDisabledHint>
 </LanguageData>

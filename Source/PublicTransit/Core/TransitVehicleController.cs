@@ -106,7 +106,12 @@ namespace PublicTransit.Core
                 return;
             }
 
-            if (!VehicleAdapter.HasActiveDriver(vehicle))
+            // With no shift assigned, preserve the old manual-VF boarding mode.
+            // With a specific driver assigned, require THAT pawn in the driver seat.
+            bool driverReady = route.AssignedDriver == null
+                ? VehicleAdapter.HasActiveDriver(vehicle)
+                : VehicleAdapter.IsPawnDriving(vehicle, route.AssignedDriver);
+            if (!driverReady)
             {
                 if (route.RunState == TransitRunState.Moving ||
                     route.RunState == TransitRunState.Recovering)

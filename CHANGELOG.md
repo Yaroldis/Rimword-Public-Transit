@@ -1,3 +1,13 @@
+## 0.5.0-dev — Assigned-driver prototype (2026-11-08)
+
+- Player can assign a specific colonist to a line. The same pawn cannot be assigned to a second line.
+- `TransitRoute` stores the driver as a persistent RimWorld reference; existing saves without it retain manual VF boarding.
+- Route controller requires the explicitly assigned pawn in the driver seat before movement.
+- Added an experimental `PT_BoardTransitDriver` Job and a conservative periodic dispatcher, both disabled until the player enables experimental boarding in mod settings. Only idle, undrafted assigned colonists are given boarding jobs; VF retains seat management.
+- Boarding uses reflection against VF's `TryAddPawn(Pawn, VehicleRoleHandler)` if present; missing API fails closed with a log and leaves manual boarding available.
+- No automatic driver selection, work-priority UI, shift scheduling, passenger AI, or train driving yet.
+- Must be compiled by GitHub Actions and tested in RimWorld 1.6 + VF 1.6.2144.
+
 ## 0.4.2-dev — Path recovery hardening (2026-11-07)
 
 - Fix a premature route-stop condition: `VehiclePathFollower.Moving == false` is no longer treated as proof of a blocked road. Wait for sustained inactivity before reissuing a path.

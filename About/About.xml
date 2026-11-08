@@ -3,8 +3,8 @@
   <name>Public Transit</name>
   <author>Public Transit Contributors</author>
   <packageId>RimTransit.PublicTransit</packageId>
-  <description>Development build for RimWorld 1.6. Adds stops, fixed lines, vehicle assignments, and experimental driver-required road movement with ignition handling, footprint-aware docking, and conservative path recovery. Train movement, automated driver jobs, and passenger AI are not included yet.</description>
-  <modVersion>0.4.2-dev</modVersion>
+  <description>Development build for RimWorld 1.6. Adds stops, fixed lines, vehicle assignments, and experimental driver-required road movement with ignition handling, footprint-aware docking, and conservative path recovery. Experimental assigned-driver boarding job is included. Train movement and passenger AI are not included yet.</description>
+  <modVersion>0.5.0-dev</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
