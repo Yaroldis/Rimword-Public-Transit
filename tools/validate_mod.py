@@ -38,12 +38,13 @@ def main():
     base_texture = ROOT / "Textures" / (stop.findtext("graphicData/texPath") + ".png")
     require(base_texture.exists(), f"Stop UI texture missing: {base_texture}")
     require(base_texture.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"), "Stop UI texture is not PNG")
-    require(stop.findtext("graphicData/graphicClass") == "Graphic_Multi", "Transit stop must have direction graphics")
-    for direction in ("north", "east", "south", "west"):
-        texture = ROOT / "Textures" / (stop.findtext("graphicData/texPath") + "_" + direction + ".png")
-        require(texture.exists(), f"Rotated stop texture missing: {texture}")
-        require(texture.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"),
-                f"Rotated stop texture is not PNG: {texture}")
+    require(stop.findtext("graphicData/graphicClass") == "Graphic_Single", "Stop must use native Q/E rotation")
+    require(stop.findtext("graphicData/drawRotated") == "true", "Stop graphic must turn when planning")
+    require(stop.findtext("passability") == "Impassable", "Stop post must not be drivable")
+    require(stop.findtext("placeWorkers/li") ==
+        "PublicTransit.Buildings.PlaceWorker_TransitStopDocking", "Missing ghost docking marker")
+    require((ROOT / "Source" / "PublicTransit" / "Buildings" /
+        "PlaceWorker_TransitStopDocking.cs").exists(), "Missing PlaceWorker class")
 
     project = ET.parse(ROOT / "Source" / "PublicTransit" / "PublicTransit.csproj").getroot()
     require(project.findtext("PropertyGroup/TargetFramework") == "net472", "Wrong target framework")

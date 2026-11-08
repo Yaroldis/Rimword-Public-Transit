@@ -26,15 +26,19 @@ namespace PublicTransit.Buildings
         /// marker. Rotation is RimWorld's native Rot4 and is saved by Thing.
         /// New stops are placed facing south in the ThingDef.
         /// </summary>
-        public IntVec3 DockingSideCell
+        public IntVec3 DockingSideCell => DockingSideCellFor(Position, Rotation);
+
+        /// <summary>
+        /// Shared between completed stops and construction ghosts: the docking
+        /// marker is computed from the placement rotation, never from a
+        /// separate mutable direction field.
+        /// </summary>
+        public static IntVec3 DockingSideCellFor(IntVec3 position, Rot4 facing)
         {
-            get
-            {
-                if (Rotation == Rot4.North) return Position + new IntVec3(0, 0, 1);
-                if (Rotation == Rot4.East) return Position + new IntVec3(1, 0, 0);
-                if (Rotation == Rot4.West) return Position + new IntVec3(-1, 0, 0);
-                return Position + new IntVec3(0, 0, -1); // South
-            }
+            if (facing == Rot4.North) return position + new IntVec3(0, 0, 1);
+            if (facing == Rot4.East) return position + new IntVec3(1, 0, 0);
+            if (facing == Rot4.West) return position + new IntVec3(-1, 0, 0);
+            return position + new IntVec3(0, 0, -1); // South
         }
 
         private string DockingDirectionName
@@ -46,16 +50,6 @@ namespace PublicTransit.Buildings
                 if (Rotation == Rot4.West) return "PT_DockingWest".Translate().ToString();
                 return "PT_DockingSouth".Translate().ToString();
             }
-        }
-
-        private void RotateDockingSide()
-        {
-            if (!Spawned || Map == null) return;
-            Map currentMap = Map;
-            // A live route must not keep driving towards an old parking cell.
-            currentMap.GetComponent<TransitMapComponent>()?.StopRoutesUsingStop(this);
-            Rotation = Rotation.Rotated(RotationDirection.Clockwise);
-            currentMap.mapDrawer.MapMeshDirty(Position, MapMeshFlagDefOf.Buildings);
         }
 
         public override void DrawExtraSelectionOverlays()
@@ -116,16 +110,9 @@ namespace PublicTransit.Buildings
             if (!Spawned)
                 yield break;
 
-            // Temporary icon; the final transit UI will have dedicated sprites.
+            // The station's facing (and boarding marker) is selected using
+            // RimWorld's Q/E placement rotation before construction.
             Texture2D icon = ContentFinder<Texture2D>.Get("Things/Building/TransitStop");
-            yield return new Command_Action
-            {
-                defaultLabel = "PT_RotateDockingSide".Translate(),
-                defaultDesc = "PT_RotateDockingSideDesc".Translate(),
-                icon = icon,
-                action = RotateDockingSide
-            };
-
             yield return new Command_Action
             {
                 defaultLabel = "PT_CreateRoute".Translate(),

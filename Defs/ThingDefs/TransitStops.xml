@@ -6,15 +6,19 @@
     <description>A stop for planning transit lines. Transport movement and boarding will be implemented in future updates.</description>
     <thingClass>PublicTransit.Buildings.Building_TransitStop</thingClass>
     <graphicData>
-      <texPath>Things/Building/TransitStop</texPath>
-      <graphicClass>Graphic_Multi</graphicClass>
+      <texPath>Things/Building/TransitStop_north</texPath>
+      <graphicClass>Graphic_Single</graphicClass>
+      <drawRotated>true</drawRotated>
       <drawSize>(1,1)</drawSize>
     </graphicData>
     <altitudeLayer>FloorEmplacement</altitudeLayer>
     <size>(1,1)</size>
     <rotatable>true</rotatable>
     <defaultPlacingRot>South</defaultPlacingRot>
-    <passability>Standable</passability>
+    <placeWorkers>
+      <li>PublicTransit.Buildings.PlaceWorker_TransitStopDocking</li>
+    </placeWorkers>
+    <passability>Impassable</passability>
     <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
     <useHitPoints>false</useHitPoints>
     <scatterableOnMapGen>false</scatterableOnMapGen>

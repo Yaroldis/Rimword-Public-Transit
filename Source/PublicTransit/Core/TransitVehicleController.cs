@@ -242,6 +242,13 @@ namespace PublicTransit.Core
                 return;
             }
 
+            if (IsCloseEnoughToDock(vehicle, stop, destination)
+                && VehicleAdapter.TryIsMoving(vehicle, out bool alreadyMoving) && !alreadyMoving)
+            {
+                Arrive(route, vehicle, tick);
+                return;
+            }
+
             var watch = new TravelWatch {
                 lastCell = vehicle.Position, lastProgressTick = tick, commandTick = tick };
             watch.triedDockingCells.Add(destination);
@@ -280,11 +287,19 @@ namespace PublicTransit.Core
                 return;
             }
             Building_TransitStop stop = route.Stops[route.NextStopIndex];
-            if (IsDockedAtStop(vehicle, stop))
+            // VF's Goto can finish with the vehicle root one cell short of
+            // its requested anchor. Accept that as arrival ONLY once the path
+            // is idle, on the chosen side, and close to the intended target.
+            // This prevents repeated Goto orders that can trap a large vehicle
+            // near a stop. Exact side docking is accepted while moving too.
+            if (IsDockedAtStop(vehicle, stop)
+                || (!moving && IsCloseEnoughToDock(vehicle, stop, route.DestinationCell)))
             {
-                // The footprint being beside the stop is authoritative for
-                // docking. VF can briefly be updating its internal path state.
-                if (moving) VehicleAdapter.TryStop(vehicle, out string unused);
+                if (!VehicleAdapter.TryStop(vehicle, out string stopError))
+                {
+                    Block(route, "unable to complete docking: " + stopError);
+                    return;
+                }
                 Arrive(route, vehicle, tick);
                 return;
             }
@@ -334,6 +349,17 @@ namespace PublicTransit.Core
         private void TryRecoverLeg(TransitRoute route, Thing vehicle,
             Building_TransitStop stop, int tick, TravelWatch watch, string reason)
         {
+            if (IsCloseEnoughToDock(vehicle, stop, route.DestinationCell))
+            {
+                if (!VehicleAdapter.TryStop(vehicle, out string nearStopError))
+                {
+                    Block(route, "cannot complete near-stop recovery: " + nearStopError);
+                    return;
+                }
+                Arrive(route, vehicle, tick);
+                return;
+            }
+
             if (watch.retries >= MaxDockingRetries)
             {
                 Block(route, "VF travel did not reach stop='" + stop.StopName
@@ -405,7 +431,9 @@ namespace PublicTransit.Core
 
             // Already at the chosen stop: do not restart ignition just to
             // notice on the next tick that a break can start immediately.
-            if (IsDockedAtStop(vehicle, route.Stops[index]))
+            if (IsDockedAtStop(vehicle, route.Stops[index])
+                || (route.NextStopIndex == index
+                    && IsCloseEnoughToDock(vehicle, route.Stops[index], route.DestinationCell)))
             {
                 route.SetNextStopIndex(index);
                 Arrive(route, vehicle, tick);
@@ -567,6 +595,41 @@ namespace PublicTransit.Core
         private static int DistanceFromBodyToStop(Thing vehicle, Building_TransitStop stop)
         {
             return FootprintGap(vehicle.OccupiedRect(), stop.Position);
+        }
+
+        /// <summary>
+        /// VF may finish a Goto within one root cell of the destination.
+        /// The vehicle must still be close to the stop; normally it also
+        /// must be on the marked side. A legacy vehicle that was already on
+        /// top of a passable stop is allowed to finish this one arrival and
+        /// leave instead of retrying a path through the stop forever.
+        /// New stops are impassable, preventing that overlap in normal play.
+        /// </summary>
+        private static bool IsCloseEnoughToDock(Thing vehicle,
+            Building_TransitStop stop, IntVec3 requestedAnchor)
+        {
+            if (!requestedAnchor.IsValid) return false;
+            IntVec3 actual = vehicle.Position;
+            if (Math.Abs(actual.x - requestedAnchor.x) > 1
+                || Math.Abs(actual.z - requestedAnchor.z) > 1)
+                return false;
+            CellRect body = vehicle.OccupiedRect();
+            IntVec3 post = stop.Position;
+            if (FootprintGap(body, post) > 2) return false;
+            if (body.Contains(post)) return true; // legacy overlap: allow departure
+
+            // Side of the bus stop, with up to one cell of lateral offset.
+            if (stop.Rotation == Rot4.South)
+                return body.maxZ < post.z && post.x >= body.minX - 1
+                    && post.x <= body.maxX + 1;
+            if (stop.Rotation == Rot4.North)
+                return body.minZ > post.z && post.x >= body.minX - 1
+                    && post.x <= body.maxX + 1;
+            if (stop.Rotation == Rot4.East)
+                return body.minX > post.x && post.z >= body.minZ - 1
+                    && post.z <= body.maxZ + 1;
+            return body.maxX < post.x && post.z >= body.minZ - 1
+                && post.z <= body.maxZ + 1;
         }
 
         private static bool IsDockedAtStop(Thing vehicle, Building_TransitStop stop)
