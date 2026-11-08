@@ -55,7 +55,7 @@ namespace PublicTransit.Buildings
             // A live route must not keep driving towards an old parking cell.
             currentMap.GetComponent<TransitMapComponent>()?.StopRoutesUsingStop(this);
             Rotation = Rotation.Rotated(RotationDirection.Clockwise);
-            currentMap.mapDrawer.MapMeshDirty(Position, MapMeshFlag.Things);
+            currentMap.mapDrawer.MapMeshDirty(Position, MapMeshFlagDefOf.Things);
         }
 
         public override void DrawExtraSelectionOverlays()
