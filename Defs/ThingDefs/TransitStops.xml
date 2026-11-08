@@ -19,6 +19,7 @@
       <li>PublicTransit.Buildings.PlaceWorker_TransitStopDocking</li>
     </placeWorkers>
     <passability>Impassable</passability>
+    <disableImpassableShotOverConfigError>true</disableImpassableShotOverConfigError>
     <terrainAffordanceNeeded>Light</terrainAffordanceNeeded>
     <useHitPoints>false</useHitPoints>
     <scatterableOnMapGen>false</scatterableOnMapGen>
