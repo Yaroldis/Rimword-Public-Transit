@@ -254,9 +254,11 @@ namespace PublicTransit.Core
                 Arrive(route, vehicle, tick);
                 return;
             }
-            if (!TryGetDockingCell(stop, vehicle, null, out IntVec3 destination))
+            if (!TryGetDockingCell(stop, vehicle, null, out IntVec3 destination,
+                out string dockingProblem))
             {
-                Block(route, "no full-size parking space on the marked side of '" + stop.StopName + "'");
+                Block(route, "no reachable full-size parking space on the marked side of '"
+                    + stop.StopName + "': " + dockingProblem);
                 return;
             }
 
@@ -471,10 +473,11 @@ namespace PublicTransit.Core
             {
                 // Only the second retry tries a different valid parking cell.
                 if (!TryGetDockingCell(stop, vehicle, watch.triedDockingCells,
-                    out destination))
+                    out destination, out string dockingProblem))
                 {
-                    Block(route, "no alternative docking cell on the marked side of '" + stop.StopName
-                        + "' after VF stopped at " + vehicle.Position
+                    Block(route, "no reachable alternative docking cell on the marked side of '"
+                        + stop.StopName + "' after VF stopped at " + vehicle.Position
+                        + ": " + dockingProblem
                         + "; VF state: " + VehicleAdapter.DescribeMovement(vehicle));
                     return;
                 }
@@ -618,22 +621,54 @@ namespace PublicTransit.Core
         }
 
         /// <summary>
-        /// Docking side is fixed by the stop's rotation (South by default).
-        /// The vehicle footprint must contain the adjacent boarding marker cell,
-        /// without overlapping the stop. Do not search the other three sides:
-        /// a blocked boarding side is a genuine route-layout problem.
+        /// Pick a root cell from VF-reachable, full-size parking locations on
+        /// the marked side of the stop. The longitudinal axis is PREFERENTIALLY
+        /// parallel to the curb: N/S side -> E/W heading; E/W side -> N/S.
+        /// VF owns the actual final vehicle rotation: a Goto has no guaranteed
+        /// arrival-facing parameter. Thus the preferred orientation is only
+        /// used to place the anchor and score candidate footprints.
         /// </summary>
         private bool TryGetDockingCell(Building_TransitStop stop, Thing vehicle,
             HashSet<IntVec3> excluded, out IntVec3 destination)
         {
-            destination = IntVec3.Invalid;
-            IntVec3 marker = stop.DockingSideCell;
-            if (!marker.InBounds(map) || !marker.Standable(map)) return false;
+            return TryGetDockingCell(stop, vehicle, excluded, out destination,
+                out string unused);
+        }
 
+        private sealed class DockingCandidate
+        {
+            public IntVec3 Root;
+            public int Score;
+            public bool FitsCurrentRotation;
+        }
+
+        private bool TryGetDockingCell(Building_TransitStop stop, Thing vehicle,
+            HashSet<IntVec3> excluded, out IntVec3 destination, out string failure)
+        {
+            destination = IntVec3.Invalid;
+            failure = null;
+            IntVec3 marker = stop.DockingSideCell;
+            if (!marker.InBounds(map) || !marker.Standable(map))
+            {
+                failure = "the boarding marker is not standable";
+                return false;
+            }
+            if (vehicle.def == null)
+            {
+                failure = "vehicle has no ThingDef";
+                return false;
+            }
+
+            // Choose a projected footprint whose LONG axis runs ALONG the
+            // curb, accounting for vehicle defs with either base orientation.
+            // A Goto specifies a root cell, not a forced arrival rotation.
+            bool curbRunsNorthSouth = stop.Rotation == Rot4.East
+                || stop.Rotation == Rot4.West;
+            bool baseLongRunsNorthSouth = vehicle.def.size.z >= vehicle.def.size.x;
+            Rot4 curbRotation = curbRunsNorthSouth == baseLongRunsNorthSouth
+                ? Rot4.North : Rot4.East;
             int radius = Math.Max(5, Math.Max(vehicle.def.size.x, vehicle.def.size.z) + 3);
-            int bestAlignment = int.MaxValue;
-            // Deterministic tie-breaking: unlike the former algorithm, this
-            // does not depend on which direction the vehicle approached from.
+            var candidates = new List<DockingCandidate>();
             IntVec3 station = stop.Position;
             for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++)
@@ -641,23 +676,91 @@ namespace PublicTransit.Core
                 IntVec3 root = new IntVec3(station.x + dx, 0, station.z + dz);
                 if (!root.InBounds(map) || (excluded != null && excluded.Contains(root)))
                     continue;
-                CellRect footprint = GenAdj.OccupiedRect(root, vehicle.Rotation, vehicle.def.size);
-                if (!footprint.InBounds(map) || !FootprintOnDockingSide(footprint, stop))
+                // Never send Goto to our own root if we are not docked:
+                // such an order immediately succeeds without moving.
+                if (root == vehicle.Position && !IsDockedAtStop(vehicle, stop))
                     continue;
-                if (!FootprintCanPark(footprint, vehicle)) continue;
 
-                // All eligible footprints contain the same marker cell. Prefer
-                // the one whose center line matches the marker most closely.
-                int alignment = (stop.Rotation == Rot4.South || stop.Rotation == Rot4.North)
-                    ? Math.Abs(footprint.minX + footprint.maxX - 2 * station.x)
-                    : Math.Abs(footprint.minZ + footprint.maxZ - 2 * station.z);
-                if (alignment < bestAlignment)
-                {
-                    bestAlignment = alignment;
-                    destination = root;
-                }
+                CellRect curbBody = GenAdj.OccupiedRect(root, curbRotation, vehicle.def.size);
+                if (!curbBody.InBounds(map) || !FootprintOnDockingSide(curbBody, stop)
+                    || !FootprintCanPark(curbBody, vehicle)) continue;
+
+                CellRect currentBody = GenAdj.OccupiedRect(root, vehicle.Rotation, vehicle.def.size);
+                bool fitsCurrent = currentBody.InBounds(map)
+                    && !currentBody.Contains(stop.Position)
+                    && FootprintCanPark(currentBody, vehicle);
+                int alignment = (stop.Rotation == Rot4.North || stop.Rotation == Rot4.South)
+                    ? Math.Abs(curbBody.minX + curbBody.maxX - 2 * station.x)
+                    : Math.Abs(curbBody.minZ + curbBody.maxZ - 2 * station.z);
+                int travel = Math.Abs(root.x - vehicle.Position.x)
+                    + Math.Abs(root.z - vehicle.Position.z);
+                // Prefer an anchor safe for BOTH the intended parallel body
+                // and the current orientation, then central alignment.
+                candidates.Add(new DockingCandidate {
+                    Root = root,
+                    FitsCurrentRotation = fitsCurrent,
+                    Score = (fitsCurrent ? 0 : 10000) + alignment * 100 + travel
+                });
             }
-            return destination.IsValid;
+            candidates.Sort((a, b) => {
+                int compare = a.Score.CompareTo(b.Score);
+                if (compare != 0) return compare;
+                compare = a.Root.x.CompareTo(b.Root.x);
+                return compare != 0 ? compare : a.Root.z.CompareTo(b.Root.z);
+            });
+            if (candidates.Count == 0)
+            {
+                failure = "no geometrically valid parking root (curb orientation="
+                    + curbRotation + ")";
+                return false;
+            }
+
+            // VF's region reachability is only a fast precheck; the full path
+            // can still fail asynchronously when the Goto is executed.
+            // An API lookup failure is NOT the same as VF reporting unreachable.
+            int checkedCount = 0;
+            string unknownReason = null;
+            IntVec3 unknownCandidate = IntVec3.Invalid;
+            bool unknownFitsCurrent = false;
+            foreach (DockingCandidate candidate in candidates)
+            {
+                bool queried = VehicleAdapter.TryCanReachVehicle(vehicle,
+                    candidate.Root, out bool reachable, out string diagnostic);
+                if (!queried)
+                {
+                    if (!unknownCandidate.IsValid)
+                    {
+                        unknownCandidate = candidate.Root;
+                        unknownReason = diagnostic;
+                        unknownFitsCurrent = candidate.FitsCurrentRotation;
+                    }
+                    // Other candidates cannot improve an unavailable API.
+                    break;
+                }
+                checkedCount++;
+                if (!reachable) continue;
+                destination = candidate.Root;
+                Log.Message("[Public Transit][DockChoice] stop='" + stop.StopName
+                    + "', root=" + destination + ", vfReachable=True, assessed="
+                    + checkedCount + "/" + candidates.Count
+                    + ", curbRotation=" + curbRotation
+                    + ", currentRotationFits=" + candidate.FitsCurrentRotation);
+                return true;
+            }
+            if (unknownCandidate.IsValid)
+            {
+                // Preserve compatibility with other VF builds: use the
+                // geometrically checked target, but do not claim reachability.
+                destination = unknownCandidate;
+                Log.Warning("[Public Transit][DockChoice] VF reachability unavailable ("
+                    + unknownReason + "); using geometric fallback " + destination
+                    + ", currentRotationFits=" + unknownFitsCurrent);
+                return true;
+            }
+            failure = "VF CanReachVehicle(OnCell) rejected " + checkedCount
+                + " geometrically valid root(s) from " + vehicle.Position
+                + " (side=" + stop.Rotation + ", preferredBody=" + curbRotation + ")";
+            return false;
         }
 
         private static bool FootprintOnDockingSide(CellRect footprint, Building_TransitStop stop)

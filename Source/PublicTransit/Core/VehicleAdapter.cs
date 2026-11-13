@@ -546,19 +546,32 @@ namespace PublicTransit.Core
         }
 
         /// <summary>
-        /// Observational VF reachability probe for 0.5.4e only. It does not
-        /// reject or alter a Goto based on its result. The VF region precheck
-        /// and full pathfinder are separate systems; disagreement is useful
-        /// diagnostic data but not proof that the destination is blocked.
+        /// Ask VEHICLE FRAMEWORK (not Verse's pawn pathfinder) whether this
+        /// vehicle can reach the proposed root cell. "CanReachVehicle" is the
+        /// framework's fast region-based reachability precheck; it does not
+        /// guarantee that the asynchronous pathfinder will find a full path.
+        /// Return false only when the API cannot be inspected, distinct from
+        /// a genuine VF result of "reachable = false".
         /// </summary>
-        private static string DescribeVehicleReachability(Thing vehicle, IntVec3 destination)
+        public static bool TryCanReachVehicle(Thing vehicle, IntVec3 root,
+            out bool reachable, out string diagnostic)
         {
+            reachable = false;
+            diagnostic = null;
+            if (!IsVehicle(vehicle) || !vehicle.Spawned || !root.IsValid)
+            {
+                diagnostic = "vehicle not spawned or target invalid";
+                return false;
+            }
             try
             {
                 Type utility = vehicle.GetType().Assembly.GetType(
                     "Vehicles.VehicleReachabilityUtility", false);
-                if (utility == null) return "reachability=unavailable (VF utility not found)";
-
+                if (utility == null)
+                {
+                    diagnostic = "Vehicles.VehicleReachabilityUtility not found";
+                    return false;
+                }
                 const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
                     BindingFlags.Static;
                 foreach (MethodInfo method in utility.GetMethods(flags))
@@ -570,19 +583,43 @@ namespace PublicTransit.Core
                         || p[2].ParameterType != typeof(Verse.AI.PathEndMode)
                         || p[3].ParameterType != typeof(Danger)
                         || p[4].ParameterType != typeof(TraverseMode)) continue;
+                    // This exact signature was observed in the installed VF
+                    // 1.6 API. "ByPawn" here is the game's traversal MODE
+                    // enum passed TO VF; it is not Verse's pawn pathfinder.
                     object result = method.Invoke(null, new object[] {
-                        vehicle, new LocalTargetInfo(destination),
+                        vehicle, new LocalTargetInfo(root),
                         Verse.AI.PathEndMode.OnCell, Danger.Deadly, TraverseMode.ByPawn });
-                    return "reachability=" + (result is bool ? result.ToString() : "unknown")
-                        + " (mode=OnCell/Danger.Deadly/ByPawn; diagnostic only)";
+                    if (!(result is bool))
+                    {
+                        diagnostic = "VF reachability returned a non-boolean value";
+                        return false;
+                    }
+                    reachable = (bool)result;
+                    diagnostic = "VF CanReachVehicle(OnCell)=" + reachable;
+                    return true;
                 }
-                return "reachability=unavailable (VF signature differs)";
+                diagnostic = "VF reachability signature differs";
+                return false;
             }
             catch (Exception ex)
             {
-                return "reachability=unavailable (" + (ex.InnerException ?? ex).GetType().Name
-                    + ": " + (ex.InnerException ?? ex).Message + ")";
+                Exception cause = ex.InnerException ?? ex;
+                diagnostic = "VF reachability exception: " + cause.GetType().Name
+                    + ": " + cause.Message;
+                return false;
             }
+        }
+
+        /// <summary>
+        /// Existing JobTrace logging from 0.5.4e, now backed by the same
+        /// reachability probe used when choosing a docking anchor.
+        /// </summary>
+        private static string DescribeVehicleReachability(Thing vehicle, IntVec3 destination)
+        {
+            bool found = TryCanReachVehicle(vehicle, destination,
+                out bool reachable, out string diagnostic);
+            return found ? "reachability=" + reachable + " (" + diagnostic + ")"
+                : "reachability=unknown (" + diagnostic + ")";
         }
 
         /// <summary>
