@@ -260,6 +260,20 @@ namespace PublicTransit.Core
                 return;
             }
 
+            // Diagnostic only: compare the chosen parking anchor with the
+            // actual rotation after a fully automatic arrival. Earlier versions
+            // calculate the destination footprint using the vehicle's CURRENT
+            // rotation, which can differ from the rotation at arrival.
+            Log.Message("[Public Transit][DockDiag] depart: stop='" + stop.StopName
+                + "', vehiclePos=" + vehicle.Position + ", vehicleRot=" + vehicle.Rotation
+                + ", currentBody=" + vehicle.OccupiedRect()
+                + ", stopPos=" + stop.Position + ", stopRot=" + stop.Rotation
+                + ", marker=" + stop.DockingSideCell
+                + ", chosenAnchor=" + destination
+                + ", assumedArrivalBody="
+                + GenAdj.OccupiedRect(destination, vehicle.Rotation, vehicle.def.size)
+                + ", nextIndex=" + route.NextStopIndex);
+
             if (IsCloseEnoughToDock(vehicle, stop, destination)
                 && VehicleAdapter.TryIsMoving(vehicle, out bool alreadyMoving) && !alreadyMoving)
             {
@@ -536,6 +550,18 @@ namespace PublicTransit.Core
 
         private void Arrive(TransitRoute route, Thing vehicle, int tick)
         {
+            // Diagnostic only: the actual footprint/rotation at the stop can
+            // differ from the footprint assumed when the Goto was requested.
+            if (route.NextStopIndex >= 0 && route.NextStopIndex < route.Stops.Count)
+            {
+                Building_TransitStop reached = route.Stops[route.NextStopIndex];
+                Log.Message("[Public Transit][DockDiag] arrived: stop='" + reached.StopName
+                    + "', vehiclePos=" + vehicle.Position + ", vehicleRot=" + vehicle.Rotation
+                    + ", actualBody=" + vehicle.OccupiedRect()
+                    + ", commandedAnchor=" + route.DestinationCell
+                    + ", stopPos=" + reached.Position + ", stopRot=" + reached.Rotation
+                    + ", marker=" + reached.DockingSideCell);
+            }
             if (route.DriverBreakPending
                 && route.NextStopIndex == route.DriverBreakStopIndex)
             {
