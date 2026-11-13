@@ -721,18 +721,39 @@ namespace PublicTransit.Core
             if (FootprintGap(body, post) > 2) return false;
             if (body.Contains(post)) return true; // legacy overlap: allow departure
 
-            // Side of the bus stop, with up to one cell of lateral offset.
+            // First prefer the intended docking side and allow a one-cell
+            // lateral offset, as in previous versions.
+            bool onExpectedSide;
             if (stop.Rotation == Rot4.South)
-                return body.maxZ < post.z && post.x >= body.minX - 1
+                onExpectedSide = body.maxZ < post.z && post.x >= body.minX - 1
                     && post.x <= body.maxX + 1;
-            if (stop.Rotation == Rot4.North)
-                return body.minZ > post.z && post.x >= body.minX - 1
+            else if (stop.Rotation == Rot4.North)
+                onExpectedSide = body.minZ > post.z && post.x >= body.minX - 1
                     && post.x <= body.maxX + 1;
-            if (stop.Rotation == Rot4.East)
-                return body.minX > post.x && post.z >= body.minZ - 1
+            else if (stop.Rotation == Rot4.East)
+                onExpectedSide = body.minX > post.x && post.z >= body.minZ - 1
                     && post.z <= body.maxZ + 1;
-            return body.maxX < post.x && post.z >= body.minZ - 1
-                && post.z <= body.maxZ + 1;
+            else
+                onExpectedSide = body.maxX < post.x && post.z >= body.minZ - 1
+                    && post.z <= body.maxZ + 1;
+            if (onExpectedSide) return true;
+
+            // VF may rotate the vehicle on the final path step. Our parking
+            // anchor was chosen using the rotation at departure; a changed
+            // final footprint can straddle the stop's X/Z line even though
+            // VF reached the EXACT ordered destination. Do not issue another
+            // Goto to the vehicle's current cell: treat it as a near-dock
+            // arrival only if the body is within one tile of the boarding
+            // marker and is not overlapping the stop itself.
+            if (actual == requestedAnchor
+                && FootprintGap(body, stop.DockingSideCell) <= 1)
+            {
+                Log.Message("[Public Transit][DockDiag] accepted anchor arrival with "
+                    + "rotated body: anchor=" + requestedAnchor + ", rot=" + vehicle.Rotation
+                    + ", body=" + body + ", marker=" + stop.DockingSideCell);
+                return true;
+            }
+            return false;
         }
 
         private static bool IsDockedAtStop(Thing vehicle, Building_TransitStop stop)
