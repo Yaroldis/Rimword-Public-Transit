@@ -18,6 +18,7 @@ namespace PublicTransit
         public PublicTransitMod(ModContentPack content) : base(content)
         {
             settings = GetSettings<PublicTransitSettings>();
+            Core.TransitGotoDiagnostics.Initialize();
             Log.Message("[Public Transit] Bootstrap loaded for RimWorld 1.6.");
         }
 

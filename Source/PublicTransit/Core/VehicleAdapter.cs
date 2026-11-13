@@ -517,8 +517,12 @@ namespace PublicTransit.Core
                     error = "VF vehicle has no job tracker";
                     return false;
                 }
-                // Diagnostic 0.5.4a: distinguish a queued order from a job
-                // that starts and then disappears before our next 30-tick check.
+                // Diagnostic 0.5.4e: observe the actual JobCondition if VF
+                // completes or replaces this Goto immediately. No job changes.
+                TransitGotoDiagnostics.Begin(pawn, destination);
+                Log.Message("[Public Transit][ReachDiag] from=" + vehicle.Position
+                    + ", target=" + destination + ", "
+                    + DescribeVehicleReachability(vehicle, destination));
                 string beforeJob = DescribeCurrentJob(pawn);
                 bool accepted = pawn.jobs.TryTakeOrderedJob(job);
                 string afterJob = DescribeCurrentJob(pawn);
@@ -538,6 +542,46 @@ namespace PublicTransit.Core
             {
                 error = "VF Goto job request failed: " + (ex.InnerException ?? ex).Message;
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Observational VF reachability probe for 0.5.4e only. It does not
+        /// reject or alter a Goto based on its result. The VF region precheck
+        /// and full pathfinder are separate systems; disagreement is useful
+        /// diagnostic data but not proof that the destination is blocked.
+        /// </summary>
+        private static string DescribeVehicleReachability(Thing vehicle, IntVec3 destination)
+        {
+            try
+            {
+                Type utility = vehicle.GetType().Assembly.GetType(
+                    "Vehicles.VehicleReachabilityUtility", false);
+                if (utility == null) return "reachability=unavailable (VF utility not found)";
+
+                const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Static;
+                foreach (MethodInfo method in utility.GetMethods(flags))
+                {
+                    if (method.Name != "CanReachVehicle") continue;
+                    ParameterInfo[] p = method.GetParameters();
+                    if (p.Length != 5 || !p[0].ParameterType.IsInstanceOfType(vehicle)
+                        || p[1].ParameterType != typeof(LocalTargetInfo)
+                        || p[2].ParameterType != typeof(Verse.AI.PathEndMode)
+                        || p[3].ParameterType != typeof(Danger)
+                        || p[4].ParameterType != typeof(TraverseMode)) continue;
+                    object result = method.Invoke(null, new object[] {
+                        vehicle, new LocalTargetInfo(destination),
+                        Verse.AI.PathEndMode.OnCell, Danger.Deadly, TraverseMode.ByPawn });
+                    return "reachability=" + (result is bool ? result.ToString() : "unknown")
+                        + " (mode=OnCell/Danger.Deadly/ByPawn; diagnostic only)";
+                }
+                return "reachability=unavailable (VF signature differs)";
+            }
+            catch (Exception ex)
+            {
+                return "reachability=unavailable (" + (ex.InnerException ?? ex).GetType().Name
+                    + ": " + (ex.InnerException ?? ex).Message + ")";
             }
         }
 

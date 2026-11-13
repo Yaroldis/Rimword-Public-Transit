@@ -16,5 +16,7 @@
   <ItemGroup>
     <!-- RimWorld game assemblies are NOT committed to Git. This NuGet package is references only. -->
     <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" />
+    <!-- Compile against Harmony; the Harmony mod supplies 0Harmony.dll at runtime. -->
+    <PackageReference Include="Lib.Harmony.Ref" Version="2.4.3" ExcludeAssets="runtime" />
   </ItemGroup>
 </Project>
