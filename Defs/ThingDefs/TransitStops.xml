@@ -13,7 +13,7 @@
     </graphicData>
     <altitudeLayer>FloorEmplacement</altitudeLayer>
     <size>(1,1)</size>
-    <rotatable>false</rotatable>
+    <rotatable>true</rotatable>
     <defaultPlacingRot>South</defaultPlacingRot>
     <placeWorkers>
       <li>PublicTransit.Buildings.PlaceWorker_TransitStopDocking</li>

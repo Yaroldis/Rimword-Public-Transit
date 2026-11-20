@@ -39,7 +39,7 @@ def main():
     require(base_texture.exists(), f"Stop UI texture missing: {base_texture}")
     require(base_texture.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"), "Stop UI texture is not PNG")
     require(stop.findtext("graphicData/graphicClass") == "Graphic_Single", "Stop must use native Q/E rotation")
-    require(stop.findtext("graphicData/drawRotated") == "true", "Stop graphic must turn when planning")
+    require(stop.findtext("graphicData/drawRotated") == "false", "Stop sprite must remain fixed while docking side rotates")
     require(stop.findtext("passability") == "Impassable", "Stop post must not be drivable")
     require(stop.findtext("placeWorkers/li") ==
         "PublicTransit.Buildings.PlaceWorker_TransitStopDocking", "Missing ghost docking marker")
